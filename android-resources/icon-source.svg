@@ -1,0 +1,27 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- background -->
+  <rect width="1024" height="1024" fill="#0E0E10"/>
+  <!-- subtle inner frame -->
+  <rect x="40" y="40" width="944" height="944" rx="160" fill="#17171A" stroke="#2E2E34" stroke-width="2"/>
+
+  <!-- focal "✦" mark -->
+  <g transform="translate(512 512)">
+    <!-- four-point star -->
+    <path d="M 0 -260
+             L 60 -60
+             L 260 0
+             L 60 60
+             L 0 260
+             L -60 60
+             L -260 0
+             L -60 -60 Z"
+          fill="#E8A030"/>
+    <!-- accent dot -->
+    <circle r="36" fill="#0E0E10"/>
+    <circle r="18" fill="#E8A030"/>
+  </g>
+
+  <!-- bottom wordmark -->
+  <text x="512" y="900" text-anchor="middle" font-family="DM Mono, monospace"
+        font-size="64" font-weight="500" fill="#F0EFE8" letter-spacing="6">FOCL</text>
+</svg>
