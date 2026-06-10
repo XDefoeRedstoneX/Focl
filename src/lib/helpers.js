@@ -1,9 +1,18 @@
-export const todayISO = () => new Date().toISOString().slice(0, 10);
+// Format a Date as YYYY-MM-DD using the *local* calendar date.
+// (toISOString() formats in UTC, which is the previous day for timezones
+// east of UTC until UTC midnight — e.g. before 7am in UTC+7.)
+export const localISO = (d) => {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+};
+
+export const todayISO = () => localISO(new Date());
 
 export const addDays = (n, baseISO) => {
   const d = baseISO ? new Date(baseISO + 'T00:00:00') : new Date();
   d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return localISO(d);
 };
 
 export const fmtDate = (d) =>
@@ -47,7 +56,7 @@ export const weekISO = (anchor, startsOn = WEEK_START) => {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    return d.toISOString().slice(0, 10);
+    return localISO(d);
   });
 };
 
@@ -66,7 +75,7 @@ export const nextOccurrence = (recurrence, customDays, fromISO) => {
   if (!recurrence || recurrence === 'none') return null;
   const base = new Date(fromISO + 'T00:00:00');
 
-  const iso = (d) => d.toISOString().slice(0, 10);
+  const iso = localISO;
 
   if (recurrence === 'daily') {
     base.setDate(base.getDate() + 1);
@@ -108,6 +117,16 @@ export const nextOccurrence = (recurrence, customDays, fromISO) => {
   return null;
 };
 
+// Number of events that occur at least once during `week` (7 ISO dates).
+// Recurrences without a fixed weekly footprint (biweekly/monthly) are
+// approximated as absent, matching the Analytics screen.
+export const countEventsInWeek = (events, week) => events.filter(e => {
+  if (e.recurrence === 'none') return week.includes(e.startDatetime.slice(0, 10));
+  if (['daily', 'weekdays', 'weekly'].includes(e.recurrence)) return true;
+  if (e.recurrence === 'custom') return (e.customDays || []).length > 0;
+  return false;
+}).length;
+
 // Whether a habit is "due" today, based on frequency / customDays
 export const isHabitDueOn = (habit, dateISO) => {
   const dKey = getDayKey(new Date(dateISO + 'T00:00:00'));
@@ -125,7 +144,7 @@ export const computeStreak = (completions, frequency, customDays) => {
   const d = new Date();
   // walk backward; if a day "should be done" and isn't, break.
   for (let i = 0; i < 366; i++) {
-    const iso = d.toISOString().slice(0, 10);
+    const iso = localISO(d);
     const due = isHabitDueOn({ frequency, customDays }, iso);
     if (due) {
       if (set.has(iso)) streak++;

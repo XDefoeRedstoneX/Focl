@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { C, card, sectionTitle, screenTitle, dot, inp, screenPad, SWATCHES } from '../lib/theme.js';
-import { weekISO, newId } from '../lib/helpers.js';
+import { weekISO } from '../lib/helpers.js';
 import { Empty, Confirm } from '../components/ui.jsx';
 import { SwipeRow } from '../components/SwipeRow.jsx';
 import { RowMenu } from '../components/RowMenu.jsx';
 
-export function Spaces({ spaces, setSpaces, tasks, habits, setScreen }) {
+export function Spaces({ spaces, saveSpace, deleteSpace, tasks, habits, setScreen }) {
   const week = weekISO();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -22,15 +22,11 @@ export function Spaces({ spaces, setSpaces, tasks, habits, setScreen }) {
   const cancel = () => { setAdding(false); setEditingId(null); };
   const save = () => {
     if (!name.trim()) return;
-    if (editingId) {
-      setSpaces(s => s.map(x => x.id === editingId ? { ...x, name, color } : x));
-    } else {
-      setSpaces(s => [...s, { id: newId(), name: name.trim(), color }]);
-    }
+    saveSpace({ id: editingId, name: name.trim(), color });
     cancel();
   };
   const remove = (id) => {
-    setSpaces(s => s.filter(x => x.id !== id));
+    deleteSpace(id);
     setConfirmDelete(null);
   };
 

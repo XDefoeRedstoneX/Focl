@@ -22,6 +22,18 @@ describe('todayISO', () => {
   it('returns the current date as YYYY-MM-DD', () => {
     expect(todayISO()).toBe('2026-06-10');
   });
+
+  it('uses the local calendar date, not UTC', () => {
+    // 20:00 UTC on Jun 10 is already 03:00 on Jun 11 in Jakarta (UTC+7)
+    const prevTZ = process.env.TZ;
+    process.env.TZ = 'Asia/Jakarta';
+    try {
+      vi.setSystemTime(new Date('2026-06-10T20:00:00Z'));
+      expect(todayISO()).toBe('2026-06-11');
+    } finally {
+      process.env.TZ = prevTZ;
+    }
+  });
 });
 
 describe('addDays', () => {

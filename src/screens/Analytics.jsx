@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { C, card, screenTitle, screenPad, sectionTitle, sectionLabel, dot, monoMicro, accentTint } from '../lib/theme.js';
-import { weekDaysFrom, weekISO } from '../lib/helpers.js';
+import { weekDaysFrom, weekISO, countEventsInWeek } from '../lib/helpers.js';
 
 /**
  * Analytics: current week's stats + archived past weeks.
@@ -119,14 +119,7 @@ function computeCurrentWeek({ tasks, events, habits, spaces }) {
     completionRate,
     habitsCompleted: habitDone,
     habitSlots, habitPct,
-    eventsCount: events.filter(e => {
-      if (e.recurrence === 'none') return week.includes(e.startDatetime.slice(0, 10));
-      if (e.recurrence === 'daily') return true;
-      if (e.recurrence === 'weekdays') return true;
-      if (e.recurrence === 'weekly') return true;
-      if (e.recurrence === 'custom') return e.customDays.length > 0;
-      return false;
-    }).length,
+    eventsCount: countEventsInWeek(events, week),
     byDay,
     perHabit,
     perSpace,

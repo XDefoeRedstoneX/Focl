@@ -1,13 +1,18 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useReducer, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { C, fonts } from './lib/theme.js';
-import { todayISO, newId, computeStreak, weekISO, weekDaysFrom, setWeekStart, nextOccurrence } from './lib/helpers.js';
+import { todayISO, newId, setWeekStart } from './lib/helpers.js';
 import { loadState, saveStateField } from './lib/storage.js';
 import { DEFAULTS } from './lib/seed.js';
 import { scheduleItem, cancelItem } from './lib/notifications.js';
 import { setHapticsEnabled, tapLight, tapMedium } from './lib/haptics.js';
+import {
+  reducer, initialState, DEFAULT_SETTINGS, PERSISTED_KEYS,
+  sanitizeImport, isSessionComplete,
+} from './state/store.js';
+import { runDailyMaintenance } from './state/maintenance.js';
 
 import { BottomNav } from './components/BottomNav.jsx';
 import { Toast } from './components/ui.jsx';
@@ -19,16 +24,6 @@ import { Spaces } from './screens/Spaces.jsx';
 import { Settings } from './screens/Settings.jsx';
 import { Analytics } from './screens/Analytics.jsx';
 import { Workout } from './screens/Workout.jsx';
-
-const DEFAULT_SETTINGS = {
-  autoDeleteCompletedDays: 7,
-  weekStartsOn: 'monday',
-  showOverdue: true,
-  hapticFeedback: true,
-  lastArchivedWeek: null, // YYYY-MM-DD of the week-start of the last archived week
-  lastCleanupDate: null,  // YYYY-MM-DD when cleanup last ran
-  lastRollDate: null,     // YYYY-MM-DD when recurring tasks last rolled forward
-};
 
 const blankDraft = (type = 'task') => ({
   id: null,
@@ -88,56 +83,51 @@ function itemToDraft(item, type) {
 }
 
 export default function App() {
+  const [state, dispatch] = useReducer(reducer, initialState);
   const [loaded, setLoaded] = useState(false);
   const [screen, setScreen] = useState('home');
   const screenRef = useRef(screen);
   useEffect(() => { screenRef.current = screen; }, [screen]);
-  const [spaces, setSpaces] = useState(DEFAULTS.spaces);
-  const [tasks, setTasks] = useState(DEFAULTS.tasks);
-  const [events, setEvents] = useState(DEFAULTS.events);
-  const [habits, setHabits] = useState(DEFAULTS.habits);
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-  const [archive, setArchive] = useState([]);
-  const [kits, setKits] = useState(DEFAULTS.kits);
-  const [plan, setPlan] = useState(DEFAULTS.plan);
-  const [sessions, setSessions] = useState([]);
   const [filter, setFilter] = useState('all');
   const [homeTab, setHomeTab] = useState('tasks');
   const [draft, setDraft] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [toast, setToast] = useState(null);
 
-  // Initial load
+  const { spaces, tasks, events, habits, settings, archive, kits, plan, sessions } = state;
+
+  // Initial load: hydrate, run daily maintenance (pure), reschedule the
+  // notifications of any tasks that rolled forward, then publish.
   useEffect(() => {
     (async () => {
       const s = await loadState(DEFAULTS);
-      setSpaces(s.spaces);
-      setTasks(s.tasks);
-      setEvents(s.events);
-      setHabits(s.habits);
-      setSettings({ ...DEFAULT_SETTINGS, ...(s.settings || {}) });
-      setArchive(s.archive || []);
-      setKits(s.kits || []);
-      setPlan(s.plan || {});
-      setSessions(s.sessions || []);
+      s.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
+      // weekISO must respect the user's week start before archiving runs
+      setWeekStart(s.settings.weekStartsOn);
+
+      const { state: next, rolledTasks } = runDailyMaintenance(s);
+      for (const t of rolledTasks) {
+        cancelItem(t.id).then(() => scheduleItem(t, 'task')).catch(() => {});
+      }
+
+      dispatch({ type: 'load', state: next });
       setLoaded(true);
     })();
   }, []);
 
-  // Persist on change (debounced trivially via per-key save)
-  useEffect(() => { if (loaded) saveStateField('spaces', spaces); }, [spaces, loaded]);
-  useEffect(() => { if (loaded) saveStateField('tasks', tasks); }, [tasks, loaded]);
-  useEffect(() => { if (loaded) saveStateField('events', events); }, [events, loaded]);
-  useEffect(() => { if (loaded) saveStateField('habits', habits); }, [habits, loaded]);
-  useEffect(() => { if (loaded) saveStateField('settings', settings); }, [settings, loaded]);
-  useEffect(() => { if (loaded) saveStateField('archive', archive); }, [archive, loaded]);
-  useEffect(() => { if (loaded) saveStateField('kits', kits); }, [kits, loaded]);
-  useEffect(() => { if (loaded) saveStateField('plan', plan); }, [plan, loaded]);
-  useEffect(() => { if (loaded) saveStateField('sessions', sessions); }, [sessions, loaded]);
+  // Persist whichever slices changed. The first pass after load saves
+  // everything so maintenance results survive a restart.
+  const persistedRef = useRef(null);
+  useEffect(() => {
+    if (!loaded) return;
+    const prev = persistedRef.current;
+    for (const k of PERSISTED_KEYS) {
+      if (!prev || prev[k] !== state[k]) saveStateField(k, state[k]);
+    }
+    persistedRef.current = state;
+  }, [state, loaded]);
 
-  // Mirror user settings into the helper modules. Declared before the
-  // daily-maintenance effect below so week-start is applied before
-  // weekISO() is used for archiving.
+  // Mirror user settings into the helper modules.
   useEffect(() => { setWeekStart(settings.weekStartsOn); }, [settings.weekStartsOn]);
   useEffect(() => { setHapticsEnabled(settings.hapticFeedback); }, [settings.hapticFeedback]);
 
@@ -182,81 +172,6 @@ export default function App() {
     };
   }, []);
 
-  // Run cleanup + weekly archive once when loaded (and once per day).
-  // These state writes are one-shot daily maintenance, not render-coupled
-  // sync — TODO: fold them into the load path during the reducer refactor.
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (!loaded) return;
-    const today = todayISO();
-
-    // 1. Auto-cleanup completed items
-    // 0. Roll recurring tasks forward. Runs at the day boundary so a task
-    //    you checked off stays visibly done all day, then becomes the next
-    //    occurrence (unchecked) the following morning. Missed recurring
-    //    tasks also advance instead of piling up as overdue.
-    if (settings.lastRollDate !== today) {
-      setTasks(ts => ts.map(t => {
-        if (!t.recurrence || t.recurrence === 'none') return t;
-        if (t.deadline >= today) return t; // due today/future — leave alone
-        // advance deadline until it lands on today or later
-        let next = t.deadline;
-        for (let i = 0; i < 62 && next < today; i++) {
-          const n = nextOccurrence(t.recurrence, t.customDays, next);
-          if (!n) break;
-          next = n;
-        }
-        if (next === t.deadline) return t;
-        const rolled = { ...t, deadline: next, done: false };
-        // reschedule its notification for the new date
-        cancelItem(t.id)
-          .then(() => scheduleItem(rolled, 'task'))
-          .catch(() => {});
-        return rolled;
-      }));
-      setSettings(s => ({ ...s, lastRollDate: today }));
-    }
-
-    // 1. Auto-cleanup completed items (never touches recurring tasks/events)
-    if (settings.autoDeleteCompletedDays > 0 && settings.lastCleanupDate !== today) {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - settings.autoDeleteCompletedDays);
-      const cutoffISO = cutoff.toISOString().slice(0, 10);
-
-      // Tasks: completed, non-recurring & deadline before cutoff
-      setTasks(ts => ts.filter(t =>
-        !(t.done && t.deadline < cutoffISO && (!t.recurrence || t.recurrence === 'none'))
-      ));
-      // Events: non-recurring & before cutoff
-      setEvents(es => es.filter(e =>
-        !(e.recurrence === 'none' && e.startDatetime.slice(0, 10) < cutoffISO)
-      ));
-
-      setSettings(s => ({ ...s, lastCleanupDate: today }));
-    }
-
-    // 2. Weekly archive: archive last week if not already
-    const thisMonday = weekISO()[0];
-    if (settings.lastArchivedWeek !== thisMonday) {
-      // Archive the *previous* week (so it goes into archive after Monday rolls over)
-      const prevWeekStart = new Date(thisMonday + 'T00:00:00');
-      prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-      const prevMonday = prevWeekStart.toISOString().slice(0, 10);
-
-      // Only archive if we actually have data and prev week is in past
-      const alreadyArchived = archive.some(a => a.weekStart === prevMonday);
-      if (!alreadyArchived && settings.lastArchivedWeek !== null) {
-        // Build a snapshot of stats for that prev week
-        const snapshot = buildWeekSnapshot(prevMonday, tasks, events, habits, spaces);
-        setArchive(a => [snapshot, ...a].slice(0, 52)); // keep up to 1 year
-      }
-
-      setSettings(s => ({ ...s, lastArchivedWeek: thisMonday }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
   // Toast auto-hide
   useEffect(() => {
     if (!toast) return;
@@ -271,45 +186,38 @@ export default function App() {
 
   const toggleTask = (id) => {
     tapLight();
-    setTasks(ts => ts.map(t => t.id === id ? { ...t, done: !t.done } : t));
+    dispatch({ type: 'task/toggle', id });
   };
 
   const deleteTask = (id) => {
     cancelItem(id).catch(() => {});
-    setTasks(ts => ts.filter(t => t.id !== id));
+    dispatch({ type: 'task/delete', id });
   };
 
   const deleteEvent = (id) => {
     cancelItem(id).catch(() => {});
-    setEvents(es => es.filter(e => e.id !== id));
+    dispatch({ type: 'event/delete', id });
   };
 
-  const deleteHabit = (id) => setHabits(hs => hs.filter(h => h.id !== id));
+  const deleteHabit = (id) => dispatch({ type: 'habit/delete', id });
 
-  const toggleHabitDay = (hid, dateISO) => {
+  const toggleHabitDay = (id, dateISO) => {
     tapLight();
-    setHabits(hs => hs.map(h => {
-      if (h.id !== hid) return h;
-      const has = h.completions.includes(dateISO);
-      const completions = has
-        ? h.completions.filter(d => d !== dateISO)
-        : [...h.completions, dateISO];
-      const streakCurrent = computeStreak(completions, h.frequency, h.customDays);
-      const streakBest = Math.max(h.streakBest, streakCurrent);
-      return { ...h, completions, streakCurrent, streakBest };
-    }));
+    dispatch({ type: 'habit/toggleDay', id, date: dateISO });
   };
 
   const quickAddTask = (name, spaceId) => {
     tapMedium();
-    const t = {
-      id: newId(), name, notes: '', spaceId, priority: 'medium',
-      deadline: todayISO(), done: false,
-      recurrence: 'none', customDays: [],
-      notifications: [],
-      createdAt: new Date().toISOString(),
-    };
-    setTasks(ts => [...ts, t]);
+    dispatch({
+      type: 'task/add',
+      task: {
+        id: newId(), name, notes: '', spaceId, priority: 'medium',
+        deadline: todayISO(), done: false,
+        recurrence: 'none', customDays: [],
+        notifications: [],
+        createdAt: new Date().toISOString(),
+      },
+    });
     setToast({ message: 'Added!' });
   };
 
@@ -335,13 +243,16 @@ export default function App() {
 
     if (draft.type === 'task') {
       if (editMode && draft.id) {
+        dispatch({
+          type: 'task/update', id: draft.id,
+          patch: {
+            name: draft.name, notes: draft.notes, spaceId: draft.spaceId,
+            priority: draft.priority, deadline: draft.deadline,
+            recurrence: draft.recurrence, customDays: draft.customDays,
+            notifications: notifs,
+          },
+        });
         const next = { ...draft, notifications: notifs, done: false };
-        setTasks(ts => ts.map(t => t.id === draft.id
-          ? { ...t, name: draft.name, notes: draft.notes, spaceId: draft.spaceId,
-              priority: draft.priority, deadline: draft.deadline,
-              recurrence: draft.recurrence, customDays: draft.customDays,
-              notifications: notifs }
-          : t));
         cancelItem(draft.id).then(() => scheduleItem(next, 'task')).catch(() => {});
       } else {
         const t = {
@@ -351,18 +262,21 @@ export default function App() {
           customDays: draft.customDays || [],
           notifications: notifs, createdAt: new Date().toISOString(),
         };
-        setTasks(ts => [...ts, t]);
+        dispatch({ type: 'task/add', task: t });
         scheduleItem(t, 'task').catch(() => {});
       }
     } else if (draft.type === 'event') {
       const startDatetime = `${draft.date}T${draft.startTime}`;
       const endDatetime = `${draft.date}T${draft.endTime}`;
       if (editMode && draft.id) {
-        setEvents(es => es.map(e => e.id === draft.id
-          ? { ...e, name: draft.name, notes: draft.notes, spaceId: draft.spaceId,
-              startDatetime, endDatetime, recurrence: draft.recurrence,
-              customDays: draft.customDays, notifications: notifs }
-          : e));
+        dispatch({
+          type: 'event/update', id: draft.id,
+          patch: {
+            name: draft.name, notes: draft.notes, spaceId: draft.spaceId,
+            startDatetime, endDatetime, recurrence: draft.recurrence,
+            customDays: draft.customDays, notifications: notifs,
+          },
+        });
         cancelItem(draft.id)
           .then(() => scheduleItem({ id: draft.id, name: draft.name, notes: draft.notes, startDatetime, notifications: notifs }, 'event'))
           .catch(() => {});
@@ -373,26 +287,31 @@ export default function App() {
           customDays: draft.customDays, notifications: notifs,
           createdAt: new Date().toISOString(),
         };
-        setEvents(es => [...es, e]);
+        dispatch({ type: 'event/add', event: e });
         scheduleItem(e, 'event').catch(() => {});
       }
     } else { // habit
       if (editMode && draft.id) {
-        setHabits(hs => hs.map(h => h.id === draft.id
-          ? { ...h, name: draft.name, spaceId: draft.spaceId,
-              frequency: draft.frequency, customDays: draft.customDays,
-              color: draft.color, goalDays: +draft.goalDays || 30 }
-          : h));
+        dispatch({
+          type: 'habit/update', id: draft.id,
+          patch: {
+            name: draft.name, spaceId: draft.spaceId,
+            frequency: draft.frequency, customDays: draft.customDays,
+            color: draft.color, goalDays: +draft.goalDays || 30,
+          },
+        });
       } else {
-        const h = {
-          id: newId(), name: draft.name, spaceId: draft.spaceId,
-          color: draft.color, frequency: draft.frequency,
-          customDays: draft.customDays,
-          streakCurrent: 0, streakBest: 0,
-          goalDays: +draft.goalDays || 30, completions: [],
-          createdAt: new Date().toISOString(),
-        };
-        setHabits(hs => [...hs, h]);
+        dispatch({
+          type: 'habit/add',
+          habit: {
+            id: newId(), name: draft.name, spaceId: draft.spaceId,
+            color: draft.color, frequency: draft.frequency,
+            customDays: draft.customDays,
+            streakCurrent: 0, streakBest: 0,
+            goalDays: +draft.goalDays || 30, completions: [],
+            createdAt: new Date().toISOString(),
+          },
+        });
       }
     }
 
@@ -408,81 +327,48 @@ export default function App() {
     setScreen('home');
   };
 
+  // === Spaces handlers ===
+
+  const saveSpace = (space) =>
+    dispatch({ type: 'space/save', space: { ...space, id: space.id || newId() } });
+
+  const deleteSpace = (id) => dispatch({ type: 'space/delete', id });
+
   // === Workout handlers ===
 
   const saveKit = (kit) => {
     tapMedium();
-    setKits(ks => ks.some(k => k.id === kit.id)
-      ? ks.map(k => k.id === kit.id ? kit : k)
-      : [...ks, kit]);
+    dispatch({ type: 'kit/save', kit });
   };
 
-  const deleteKit = (id) => {
-    setKits(ks => ks.filter(k => k.id !== id));
-    // clear any plan days pointing at it
-    setPlan(pl => {
-      const next = { ...pl };
-      for (const k of Object.keys(next)) if (next[k] === id) next[k] = null;
-      return next;
-    });
-  };
+  const deleteKit = (id) => dispatch({ type: 'kit/delete', id });
 
-  const updatePlan = (partial) => setPlan(pl => ({ ...pl, ...partial }));
+  const updatePlan = (partial) => dispatch({ type: 'plan/update', partial });
 
   const upsertSession = (sess) => {
-    setSessions(ss => {
-      const existing = ss.find(s => s.date === sess.date);
-      const merged = existing
-        ? { ...existing, ...sess }
-        : { id: newId(), ...sess };
-      const next = existing
-        ? ss.map(s => s.date === sess.date ? merged : s)
-        : [...ss, merged];
+    // Stronger haptic when this update completes the whole session
+    const existing = sessions.find(s => s.date === sess.date);
+    const merged = existing ? { ...existing, ...sess } : sess;
+    const kit = kits.find(k => k.id === merged.kitId);
+    const completesNow = !!kit && kit.exercises.length > 0 &&
+      isSessionComplete(kit, merged.ex) &&
+      !(existing && isSessionComplete(kit, existing.ex));
+    if (completesNow) tapMedium(); else tapLight();
 
-      // completion detection: all sets of all exercises in the kit done
-      const kit = kits.find(k => k.id === merged.kitId);
-      if (kit && kit.exercises.length) {
-        const total = kit.exercises.reduce((a, e) => a + e.sets, 0);
-        const done = kit.exercises.reduce((a, e) => a + Math.min(merged.ex?.[e.id]?.done || 0, e.sets), 0);
-        const wasComplete = existing && kit.exercises.reduce((a, e) => a + Math.min(existing.ex?.[e.id]?.done || 0, e.sets), 0) >= total;
-        if (done >= total && !wasComplete) {
-          tapMedium();
-          // auto-check linked habit for the day (only if not already checked)
-          if (plan.linkedHabitId) {
-            const h = habits.find(x => x.id === plan.linkedHabitId);
-            if (h && !h.completions.includes(sess.date)) toggleHabitDay(h.id, sess.date);
-          }
-        } else {
-          tapLight();
-        }
-      }
-      return next;
-    });
+    dispatch({ type: 'session/upsert', session: sess, id: newId() });
   };
 
   // Settings & data actions
-  const updateSettings = (partial) => setSettings(s => ({ ...s, ...partial }));
+  const updateSettings = (partial) => dispatch({ type: 'settings/update', partial });
 
-  const importState = (payload) => {
-    if (payload.spaces) setSpaces(payload.spaces);
-    if (payload.tasks) setTasks(payload.tasks);
-    if (payload.events) setEvents(payload.events);
-    if (payload.habits) setHabits(payload.habits);
-    if (payload.kits) setKits(payload.kits);
-    if (payload.plan) setPlan(payload.plan);
-    if (payload.sessions) setSessions(payload.sessions);
+  const importState = (raw) => {
+    const payload = sanitizeImport(raw); // throws on unusable files
+    dispatch({ type: 'import', payload });
     setToast({ message: 'Imported!' });
   };
+
   const resetAll = () => {
-    setSpaces(DEFAULTS.spaces);
-    setTasks(DEFAULTS.tasks);
-    setEvents(DEFAULTS.events);
-    setHabits(DEFAULTS.habits);
-    setArchive([]);
-    setKits(DEFAULTS.kits);
-    setPlan(DEFAULTS.plan);
-    setSessions([]);
-    setSettings(DEFAULT_SETTINGS);
+    dispatch({ type: 'reset' });
     setToast({ message: 'Reset complete' });
   };
 
@@ -546,7 +432,7 @@ export default function App() {
             )}
             {screen === 'spaces' && (
               <Spaces
-                spaces={spaces} setSpaces={setSpaces}
+                spaces={spaces} saveSpace={saveSpace} deleteSpace={deleteSpace}
                 tasks={tasks} habits={habits}
                 setScreen={setScreen}
               />
@@ -587,72 +473,4 @@ export default function App() {
       </div>
     </>
   );
-}
-
-// Build a snapshot of a past week for the archive
-function buildWeekSnapshot(weekMonday, tasks, events, habits, spaces) {
-  // Build the 7 day ISOs for that week
-  const start = new Date(weekMonday + 'T00:00:00');
-  const week = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    return d.toISOString().slice(0, 10);
-  });
-
-  const tasksDueThisWeek = tasks.filter(t => week.includes(t.deadline));
-  const tasksCompleted = tasksDueThisWeek.filter(t => t.done);
-  const habitDone = habits.reduce((s, h) =>
-    s + week.filter(d => h.completions.includes(d)).length, 0);
-  const habitSlots = habits.length * 7;
-  const habitPct = habitSlots ? Math.round((habitDone / habitSlots) * 100) : 0;
-  const completionRate = tasksDueThisWeek.length
-    ? Math.round((tasksCompleted.length / tasksDueThisWeek.length) * 100)
-    : 0;
-
-  const formatRange = () => {
-    const opts = { month: 'short', day: 'numeric' };
-    return `${new Date(week[0] + 'T00:00:00').toLocaleDateString('en-US', opts)} – ${new Date(week[6] + 'T00:00:00').toLocaleDateString('en-US', opts)}`;
-  };
-
-  return {
-    isCurrent: false,
-    weekStart: weekMonday,
-    label: `Week of ${formatRange()}`,
-    shortLabel: new Date(weekMonday + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    tasksCompleted: tasksCompleted.length,
-    tasksTotal: tasksDueThisWeek.length,
-    completionRate,
-    habitsCompleted: habitDone,
-    habitSlots, habitPct,
-    eventsCount: 0,
-    byDay: week.map((d, i) => {
-      const tDone = tasks.filter(t => t.done && t.deadline === d).length;
-      const hDone = habits.filter(h => h.completions.includes(d)).length;
-      return {
-        date: d,
-        dayKey: weekDaysFrom()[i],
-        tasksDone: tDone, habitsDone: hDone,
-        total: tDone + hDone,
-      };
-    }),
-    perHabit: habits.map(h => ({
-      id: h.id, name: h.name, color: h.color,
-      done: week.filter(d => h.completions.includes(d)).length,
-      target: h.frequency === 'daily' ? 7
-            : h.frequency === 'weekdays' ? 5
-            : h.frequency === '3x' ? 3
-            : (h.customDays || []).length,
-    })),
-    perSpace: spaces.map(sp => {
-      const sTasks = tasks.filter(t => t.spaceId === sp.id);
-      const sHabits = habits.filter(h => h.spaceId === sp.id);
-      const tDone = sTasks.filter(t => t.done && week.includes(t.deadline)).length;
-      const hDone = sHabits.reduce((s, h) =>
-        s + week.filter(d => h.completions.includes(d)).length, 0);
-      return {
-        id: sp.id, name: sp.name, color: sp.color,
-        tasks: tDone, habits: hDone, total: tDone + hDone,
-      };
-    }),
-  };
 }

@@ -5,11 +5,12 @@
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { todayISO } from './helpers.js';
 
 const isNative = () => Capacitor.isNativePlatform();
 
 function fileName() {
-  return `focl-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  return `focl-backup-${todayISO()}.json`;
 }
 
 /**
