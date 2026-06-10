@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { C } from '../lib/theme.js';
 
 /**
@@ -8,6 +8,9 @@ import { C } from '../lib/theme.js';
  */
 export function SwipeRow({ children, actions = [], onTap, disabled = false }) {
   const [offset, setOffset] = useState(0);
+  // isDragging mirrors dragging.current for rendering (transition on/off);
+  // the ref stays the source of truth inside move handlers.
+  const [isDragging, setIsDragging] = useState(false);
   const startX = useRef(0);
   const startOffset = useRef(0);
   const dragging = useRef(false);
@@ -22,6 +25,7 @@ export function SwipeRow({ children, actions = [], onTap, disabled = false }) {
     startX.current = x;
     startOffset.current = offset;
     dragging.current = true;
+    setIsDragging(true);
     moved.current = false;
   };
 
@@ -39,6 +43,7 @@ export function SwipeRow({ children, actions = [], onTap, disabled = false }) {
   const onPointerUp = () => {
     if (!dragging.current) return;
     dragging.current = false;
+    setIsDragging(false);
     // snap
     if (offset < maxOffset / 2) setOffset(maxOffset);
     else setOffset(0);
@@ -93,7 +98,7 @@ export function SwipeRow({ children, actions = [], onTap, disabled = false }) {
         onClick={handleClick}
         style={{
           transform: `translateX(${offset}px)`,
-          transition: dragging.current ? 'none' : 'transform 0.22s',
+          transition: isDragging ? 'none' : 'transform 0.22s',
           position: 'relative',
           zIndex: 1,
         }}

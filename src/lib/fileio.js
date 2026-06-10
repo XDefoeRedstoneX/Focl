@@ -25,7 +25,7 @@ export async function exportLocal(payload) {
     try {
       try {
         await Filesystem.mkdir({ path: 'Focl', directory: Directory.Documents, recursive: true });
-      } catch (_) {
+      } catch {
         // folder already exists - ignore
       }
       await Filesystem.writeFile({
@@ -109,7 +109,7 @@ export async function pickAndReadJSON() {
       reader.onload = (ev) => {
         try {
           resolve(JSON.parse(ev.target.result));
-        } catch (err) {
+        } catch {
           reject(new Error('Not valid JSON'));
         }
       };

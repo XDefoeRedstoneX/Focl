@@ -103,7 +103,7 @@ export async function cancelItem(itemId, notifCount = 4) {
   for (let i = 0; i < notifCount; i++) ids.push({ id: intId(itemId + ':' + i) });
   try {
     await LocalNotifications.cancel({ notifications: ids });
-  } catch (e) {
+  } catch {
     // safe to ignore
   }
 }

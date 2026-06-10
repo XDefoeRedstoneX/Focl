@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { C, card, screenTitle, screenPad, sectionLabel, dot, monoMicro, inp, SWATCHES, accentTint } from '../lib/theme.js';
+import { useState, useMemo } from 'react';
+import { C, card, screenTitle, screenPad, sectionLabel, dot, monoMicro, inp, SWATCHES } from '../lib/theme.js';
 import { todayISO, getDayKey, weekDaysFrom, newId } from '../lib/helpers.js';
 import { Chip, Empty, Confirm } from '../components/ui.jsx';
 import { RowMenu } from '../components/RowMenu.jsx';

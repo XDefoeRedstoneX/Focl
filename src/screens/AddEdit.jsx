@@ -1,4 +1,3 @@
-import React from 'react';
 import { C, card, navBtn, primaryBtn, inp, screenPad, SWATCHES } from '../lib/theme.js';
 import { todayISO, addDays, fmtTime } from '../lib/helpers.js';
 import { Field, Chip, DayPicker } from '../components/ui.jsx';

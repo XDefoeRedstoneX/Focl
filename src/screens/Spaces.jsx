@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { C, card, sectionTitle, screenTitle, dot, inp, screenPad, SWATCHES } from '../lib/theme.js';
 import { weekISO, newId } from '../lib/helpers.js';
 import { Empty, Confirm } from '../components/ui.jsx';
 import { SwipeRow } from '../components/SwipeRow.jsx';
 import { RowMenu } from '../components/RowMenu.jsx';
 
-export function Spaces({ spaces, setSpaces, tasks, habits, events, setScreen }) {
+export function Spaces({ spaces, setSpaces, tasks, habits, setScreen }) {
   const week = weekISO();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);

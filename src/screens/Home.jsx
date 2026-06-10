@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { C, card, monoMicro, sectionTitle, screenTitle, dot, inp, screenPad } from '../lib/theme.js';
-import { todayISO, fmtDate, fmtTime, getDayKey, isHabitDueOn, weekISO } from '../lib/helpers.js';
+import { todayISO, fmtDate, fmtTime, isHabitDueOn, weekISO } from '../lib/helpers.js';
 import { Chip, Section, Empty } from '../components/ui.jsx';
 import { SwipeRow } from '../components/SwipeRow.jsx';
 import { RowMenu } from '../components/RowMenu.jsx';
@@ -187,7 +187,7 @@ export function Home({
         </Section>
       )}
 
-      <HabitStrip habits={habits} spaces={spaces} toggle={toggleHabitDay} setScreen={setScreen} />
+      <HabitStrip habits={habits} toggle={toggleHabitDay} setScreen={setScreen} />
 
       <StatsCard tasks={tasks} habits={habits} setScreen={setScreen} />
     </div>
@@ -299,9 +299,8 @@ const EventCard = React.memo(function EventCard({ ev, spaces, onEdit, onDelete }
   );
 });
 
-function HabitStrip({ habits, spaces, toggle, setScreen }) {
+function HabitStrip({ habits, toggle, setScreen }) {
   const today = todayISO();
-  const dKey = getDayKey(new Date());
   const todayHabits = habits.filter(h => isHabitDueOn(h, today));
   const doneCount = todayHabits.filter(h => h.completions.includes(today)).length;
   const pct = todayHabits.length ? Math.round((doneCount / todayHabits.length) * 100) : 0;

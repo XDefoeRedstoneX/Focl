@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -91,7 +91,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [screen, setScreen] = useState('home');
   const screenRef = useRef(screen);
-  screenRef.current = screen;
+  useEffect(() => { screenRef.current = screen; }, [screen]);
   const [spaces, setSpaces] = useState(DEFAULTS.spaces);
   const [tasks, setTasks] = useState(DEFAULTS.tasks);
   const [events, setEvents] = useState(DEFAULTS.events);
@@ -147,7 +147,6 @@ export default function App() {
     if (!Capacitor.isNativePlatform()) return;
 
     let handle;
-    let cancelled = false;
     let lastBackPress = 0;
 
     // Set the status bar to match the dark theme
@@ -179,12 +178,14 @@ export default function App() {
     })();
 
     return () => {
-      cancelled = true;
       if (handle && handle.remove) handle.remove();
     };
   }, []);
 
-  // Run cleanup + weekly archive once when loaded (and once per day)
+  // Run cleanup + weekly archive once when loaded (and once per day).
+  // These state writes are one-shot daily maintenance, not render-coupled
+  // sync — TODO: fold them into the load path during the reducer refactor.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!loaded) return;
     const today = todayISO();
@@ -254,6 +255,7 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Toast auto-hide
   useEffect(() => {
@@ -545,7 +547,7 @@ export default function App() {
             {screen === 'spaces' && (
               <Spaces
                 spaces={spaces} setSpaces={setSpaces}
-                tasks={tasks} habits={habits} events={events}
+                tasks={tasks} habits={habits}
                 setScreen={setScreen}
               />
             )}

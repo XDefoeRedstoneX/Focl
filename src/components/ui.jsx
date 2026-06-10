@@ -1,5 +1,4 @@
-import React from 'react';
-import { C, card, sectionTitle, inp, accentTint, accentStrong } from '../lib/theme.js';
+import { C, card, sectionTitle, accentTint, accentStrong } from '../lib/theme.js';
 import { weekDays } from '../lib/helpers.js';
 
 export function Chip({ active, color, children, onClick, size = 'md' }) {

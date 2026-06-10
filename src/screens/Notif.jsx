@@ -1,4 +1,3 @@
-import React from 'react';
 import { C, navBtn, primaryBtn, inp, screenPad, sectionLabel, cardListStyle, rowStyle, card } from '../lib/theme.js';
 import { Toggle } from '../components/ui.jsx';
 

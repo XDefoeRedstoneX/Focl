@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { C, card, screenTitle, screenPad, sectionLabel, inp, rowStyle } from '../lib/theme.js';
+import { useState } from 'react';
+import { C, card, screenTitle, screenPad, sectionLabel, rowStyle } from '../lib/theme.js';
 import { Toggle, Confirm, Chip } from '../components/ui.jsx';
 import { exportLocal, exportShare, pickAndReadJSON } from '../lib/fileio.js';
 import { testNotification } from '../lib/notifications.js';

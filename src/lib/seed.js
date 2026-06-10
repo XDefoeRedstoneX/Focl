@@ -1,5 +1,5 @@
 import { C } from './theme.js';
-import { todayISO, addDays, weekISO, newId } from './helpers.js';
+import { todayISO, addDays, weekISO } from './helpers.js';
 
 export const SEED_SPACES = [
   { id: 'sp1', name: 'Life', color: C.green },
