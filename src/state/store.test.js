@@ -128,9 +128,12 @@ describe('import / reset', () => {
     expect(s1.habits).toBe(s0.habits);
   });
 
-  it('reset returns the seeded initial state', () => {
+  it('reset returns the empty initial state, never sample data', () => {
     const dirty = reducer(base(), { type: 'task/add', task: { id: 'tx', name: 'x' } });
-    expect(reducer(dirty, { type: 'reset' })).toEqual(initialState);
+    const s = reducer(dirty, { type: 'reset' });
+    expect(s).toEqual(initialState);
+    expect(s.tasks).toEqual([]);
+    expect(s.habits).toEqual([]);
   });
 });
 
