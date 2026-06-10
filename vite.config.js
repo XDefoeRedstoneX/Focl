@@ -13,4 +13,10 @@ export default defineConfig({
     host: true,
     port: 5173,
   },
+  test: {
+    environment: 'node',
+    // Date helpers convert between local time and UTC ISO strings;
+    // pin the zone so results don't depend on the machine running tests.
+    env: { TZ: 'UTC' },
+  },
 })

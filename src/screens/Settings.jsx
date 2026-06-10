@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { C, card, screenTitle, screenPad, sectionLabel, inp, rowStyle } from '../lib/theme.js';
+import { useState } from 'react';
+import pkg from '../../package.json';
+import { C, card, screenTitle, screenPad, sectionLabel, rowStyle } from '../lib/theme.js';
 import { Toggle, Confirm, Chip } from '../components/ui.jsx';
 import { exportLocal, exportShare, pickAndReadJSON } from '../lib/fileio.js';
 import { testNotification } from '../lib/notifications.js';
@@ -40,9 +41,10 @@ export function Settings({ settings, updateSettings, state, importState, resetAl
   const doImport = async () => {
     try {
       const parsed = await pickAndReadJSON();
-      const payload = parsed.data || parsed;
-      importState(payload);
-      if (parsed.settings) updateSettings(parsed.settings);
+      importState(parsed); // validates; throws on unusable files
+      if (parsed.settings && typeof parsed.settings === 'object') {
+        updateSettings(parsed.settings);
+      }
     } catch (err) {
       alert(`Could not import: ${err.message}`);
     }
@@ -208,7 +210,7 @@ export function Settings({ settings, updateSettings, state, importState, resetAl
       )}
 
       <div style={{ fontSize: 10, color: C.t3, textAlign: 'center', padding: '20px 0', fontFamily: 'DM Mono' }}>
-        Focl · personal build · v1.1
+        Focl · personal build · v{pkg.version}
       </div>
 
       {confirmReset && (

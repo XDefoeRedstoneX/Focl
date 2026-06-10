@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { C, card, screenTitle, screenPad, sectionTitle, sectionLabel, dot, monoMicro, accentTint } from '../lib/theme.js';
-import { weekDaysFrom, weekISO, getDayKey } from '../lib/helpers.js';
+import { weekDaysFrom, weekISO, countEventsInWeek } from '../lib/helpers.js';
 
 /**
  * Analytics: current week's stats + archived past weeks.
@@ -93,7 +93,7 @@ function computeCurrentWeek({ tasks, events, habits, spaces }) {
   const perHabit = habits.map(h => ({
     id: h.id, name: h.name, color: h.color,
     done: week.filter(d => h.completions.includes(d)).length,
-    target: countHabitTargetsInWeek(h, week),
+    target: countHabitTargetsInWeek(h),
   }));
 
   // per-space breakdown
@@ -119,22 +119,14 @@ function computeCurrentWeek({ tasks, events, habits, spaces }) {
     completionRate,
     habitsCompleted: habitDone,
     habitSlots, habitPct,
-    eventsCount: events.filter(e => {
-      const dayKey = getDayKey(new Date(e.startDatetime));
-      if (e.recurrence === 'none') return week.includes(e.startDatetime.slice(0, 10));
-      if (e.recurrence === 'daily') return true;
-      if (e.recurrence === 'weekdays') return true;
-      if (e.recurrence === 'weekly') return true;
-      if (e.recurrence === 'custom') return e.customDays.length > 0;
-      return false;
-    }).length,
+    eventsCount: countEventsInWeek(events, week),
     byDay,
     perHabit,
     perSpace,
   };
 }
 
-function countHabitTargetsInWeek(h, week) {
+function countHabitTargetsInWeek(h) {
   if (h.frequency === 'daily') return 7;
   if (h.frequency === 'weekdays') return 5;
   if (h.frequency === '3x') return 3;
@@ -193,7 +185,6 @@ function DayBars({ data }) {
         height: 120,
       }}>
         {data.byDay.map(d => {
-          const h = (d.total / max) * 100;
           return (
             <div key={d.date} style={{
               flex: 1, display: 'flex', flexDirection: 'column',

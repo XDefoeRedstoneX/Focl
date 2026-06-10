@@ -28,7 +28,7 @@ export async function ensurePermission() {
 }
 
 // Hash a string id to a stable positive 31-bit int
-function intId(s) {
+export function intId(s) {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
   return Math.abs(h) || 1;
@@ -38,7 +38,7 @@ function intId(s) {
 // timing: 'on-day' | '10min' | '30min' | '1hour' | '1day' | 'custom'
 // time: 'HH:MM' (24h)
 // referenceISO: YYYY-MM-DD anchor (deadline or event date)
-function buildFireDate(timing, time, referenceISO) {
+export function buildFireDate(timing, time, referenceISO) {
   if (!referenceISO) return null;
   const [h, m] = time.split(':').map(Number);
   const ref = new Date(`${referenceISO}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
@@ -103,7 +103,7 @@ export async function cancelItem(itemId, notifCount = 4) {
   for (let i = 0; i < notifCount; i++) ids.push({ id: intId(itemId + ':' + i) });
   try {
     await LocalNotifications.cancel({ notifications: ids });
-  } catch (e) {
+  } catch {
     // safe to ignore
   }
 }

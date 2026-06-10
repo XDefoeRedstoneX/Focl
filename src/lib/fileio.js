@@ -5,11 +5,12 @@
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { todayISO } from './helpers.js';
 
 const isNative = () => Capacitor.isNativePlatform();
 
 function fileName() {
-  return `focl-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  return `focl-backup-${todayISO()}.json`;
 }
 
 /**
@@ -25,7 +26,7 @@ export async function exportLocal(payload) {
     try {
       try {
         await Filesystem.mkdir({ path: 'Focl', directory: Directory.Documents, recursive: true });
-      } catch (_) {
+      } catch {
         // folder already exists - ignore
       }
       await Filesystem.writeFile({
@@ -109,7 +110,7 @@ export async function pickAndReadJSON() {
       reader.onload = (ev) => {
         try {
           resolve(JSON.parse(ev.target.result));
-        } catch (err) {
+        } catch {
           reject(new Error('Not valid JSON'));
         }
       };

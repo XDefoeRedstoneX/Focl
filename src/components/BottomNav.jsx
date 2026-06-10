@@ -1,4 +1,3 @@
-import React from 'react';
 import { C } from '../lib/theme.js';
 
 export function BottomNav({ screen, setScreen, openAdd }) {
