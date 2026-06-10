@@ -1,262 +1,131 @@
-# Focl — Personal Productivity App
+<div align="center">
 
-A dark-themed, offline-first tasks/events/habits tracker. Built as a React + Vite web app, wrapped with Capacitor to produce a native Android APK.
+# Focl
 
-This project was set up to be **sideloaded onto your iqoo 12**. The instructions below walk through everything end-to-end.
+**An offline-first personal productivity app — tasks, events, habits, workouts and weekly analytics in one dark, fast, native-feeling Android app.**
+
+Built with React + Vite, wrapped with Capacitor, with a hand-written native Kotlin layer for the things the web can't do.
+
+[![CI](https://github.com/XDefoeRedstoneX/Focl/actions/workflows/ci.yml/badge.svg)](https://github.com/XDefoeRedstoneX/Focl/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/tests-63%20passing-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
+
+<!-- Replace the link below with an Imgur URL of the hero shot -->
+<img src="https://via.placeholder.com/300x650?text=Focl+Hero" alt="Focl home screen" width="280" />
+
+</div>
 
 ---
 
-## What's new vs. the original artifact
+## Overview
 
-The single-file artifact has been refactored into a proper Vite project with these additions:
+Focl is a Google Tasks–style productivity app I built for daily personal use, then hardened into a portfolio project. It runs fully offline, stores everything on-device, and is designed to feel like a native Android app rather than a website in a shell — hardware back-button navigation, haptics, status-bar theming and local notifications all included.
 
-| Feature | Notes |
+The codebase is a **React/Capacitor core** for fast cross-platform UI, with the data layer modelled as a **single pure reducer** and a **native Kotlin module** for capabilities web can't reach (home-screen widget, alarm-backed reminders).
+
+## Features
+
+| | |
 |---|---|
-| **Persistent storage** | All data survives reloads & reboots. Uses Capacitor Preferences on Android (web build falls back to `localStorage`). |
-| **Quick-add on Home** | One-line input above the task list — Enter to add a medium-priority task due today, auto-tagged with the current space filter. |
-| **Swipe-to-delete / Edit on tap** | Swipe any task / event / habit / space left to reveal Edit + Delete. Tap a row to edit. |
-| **Edit mode for everything** | Reopening an item pre-fills the AddEdit screen; Save becomes Update; Delete button appears. |
-| **Search** | Search input on Home filters tasks & events by name in real time. |
-| **Overdue section** | Past-due tasks pinned above "Due today" with a red accent. |
-| **Smart streaks** | Streak recomputes from completions on every toggle, correctly handling frequency/customDays gaps. |
-| **Habit color picker** | Six accent swatches available when creating/editing habits. |
-| **Local notifications** | Native Android notifications scheduled via `@capacitor/local-notifications` based on each item's reminder settings. |
-| **Export / Import / Reset** | Profile screen has working JSON backup, restore, and full reset (with confirmation). |
-| **Stats summary** | Profile shows totals: tasks done, recurring events, lifetime habit completions, best streak. |
-| **Responsive layout** | Removed the fixed 360×740 phone frame — now fills the device screen with safe-area padding. |
-| **Confirmation modal** | Destructive actions ask before doing anything irreversible. |
+| **Tasks** | Quick-add, priorities, deadlines, recurrence (daily/weekly/biweekly/monthly/weekdays/custom), search, overdue & upcoming sections. Recurring tasks roll forward automatically at the day boundary. |
+| **Events** | Timed events with start/end, recurrence and reminders. |
+| **Habits** | Daily/weekday/3×/custom schedules, streak tracking with grace rules, a weekly grid and a per-space overview. |
+| **Workouts** | Reusable exercise *kits*, a weekly split planner, per-set logging with weight carry-over, and auto-checking of a linked habit when a session completes. |
+| **Analytics** | Per-week snapshot: completion rate, by-day bars, per-habit and per-space breakdowns, auto-generated insights, and an archive of past weeks. |
+| **Spaces** | Group everything by context (Life, College, Work…). |
+| **Data** | JSON backup to device, share-sheet export, validated import, configurable auto-cleanup, full reset. |
+| **Native polish** | Local notifications, haptic feedback, hardware back navigation, safe-area layout, offline-first storage. |
 
----
+## Screenshots
 
-## Project structure
+> Replace each placeholder with an Imgur (or other) image URL.
+
+| Home | Habits | Add | Analytics | Settings |
+|---|---|---|---|---|
+| ![Home](https://via.placeholder.com/180x390?text=Home) | ![Habits](https://via.placeholder.com/180x390?text=Habits) | ![Add](https://via.placeholder.com/180x390?text=Add) | ![Analytics](https://via.placeholder.com/180x390?text=Analytics) | ![Settings](https://via.placeholder.com/180x390?text=Settings) |
+
+## Tech stack
+
+- **UI** — React 18, Vite 5, inline style tokens (single source of truth in `lib/theme.js`)
+- **State** — `useReducer` over a pure domain reducer; side effects isolated in `App.jsx`
+- **Native bridge** — Capacitor 6 (Preferences, Local Notifications, Haptics, Filesystem, Share, Status Bar, App)
+- **Native module** — Kotlin (home-screen widget, alarm-based reminders)
+- **Quality** — ESLint 10 (flat config), Vitest (63 unit tests), GitHub Actions CI
+
+## Architecture
 
 ```
-focl-app/
-├── android-resources/
-│   └── icon-source.svg          # 1024×1024 launcher icon source
-├── public/
-│   └── focl-icon.svg            # web favicon
-├── src/
-│   ├── components/
-│   │   ├── BottomNav.jsx        # 5-item nav + center FAB
-│   │   ├── SwipeRow.jsx         # touch swipe-to-reveal-actions wrapper
-│   │   └── ui.jsx               # Chip, Section, Empty, Toggle, Toast, Field, DayPicker, Stat, Confirm
-│   ├── lib/
-│   │   ├── theme.js             # colors, fonts, shared style atoms
-│   │   ├── helpers.js           # date/id/streak math
-│   │   ├── seed.js              # SEED_* + DEFAULTS for first run
-│   │   ├── storage.js           # Capacitor Preferences with localStorage fallback
-│   │   └── notifications.js     # Capacitor LocalNotifications wrapper
-│   ├── screens/
-│   │   ├── Home.jsx
-│   │   ├── Habits.jsx
-│   │   ├── AddEdit.jsx
-│   │   ├── Notif.jsx
-│   │   ├── Spaces.jsx
-│   │   └── Profile.jsx
-│   ├── App.jsx                  # state, persistence, routing
-│   └── main.jsx                 # React entry
-├── index.html
-├── vite.config.js
-├── capacitor.config.ts
-└── package.json
+┌─────────────────────────────────────────────┐
+│  React UI (screens / components)             │
+│      ▲ props              │ dispatch         │
+│      │                    ▼                  │
+│  ┌─────────────────────────────────────┐    │
+│  │  state/  — pure reducer + daily      │    │   no side effects:
+│  │           maintenance (roll-forward, │    │   fully unit-tested
+│  │           cleanup, weekly archive)   │    │
+│  └─────────────────────────────────────┘    │
+│      │ effects (notifications, haptics,      │
+│      ▼ storage) live in App.jsx              │
+│  ┌─────────────────────────────────────┐    │
+│  │  lib/  storage · notifications ·     │    │
+│  │        haptics · fileio  (native ⇄   │    │
+│  │        browser fallbacks)            │    │
+│  └─────────────────────────────────────┘    │
+└──────────────────────│──────────────────────┘
+                       │ Capacitor bridge
+              ┌────────▼─────────┐
+              │  Native Kotlin   │  widget · alarm reminders
+              └──────────────────┘
 ```
 
----
+Every native API degrades gracefully to a browser equivalent (or a no-op), so the whole app runs in a plain browser during development and as a real APK on device.
 
-## Prerequisites
+```
+src/
+├── state/          reducer + daily maintenance (pure, tested)
+├── lib/            theme, helpers, storage, notifications, haptics, fileio, seed
+├── components/     BottomNav, SwipeRow, RowMenu, ui primitives
+├── screens/        Home, Habits, AddEdit, Notif, Spaces, Workout, Analytics, Settings
+└── App.jsx         state wiring, routing, native side effects
+```
 
-You said you already have Android Studio + Android SDK installed. You also need:
-
-- **Node.js 18 or 20** (LTS) — check with `node -v`
-- **JDK 17** — Android Studio ships with one (`Embedded JDK`). Set `JAVA_HOME` to it or use Android Studio's terminal.
-- **Android SDK Platform 34** (or whatever your Android Studio defaults to) and **Build-Tools 34.x**
-- **USB debugging enabled** on the iqoo 12 (Settings → System → About phone → tap "Build number" 7 times, then back to Developer options → USB debugging)
-
-> If anything's missing, Android Studio will prompt you to install it the first time you open the project.
-
----
-
-## Step 1 — Initial setup
-
-1. Copy this entire `focl-app/` folder to your machine.
-
-2. From inside the folder, install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-   This pulls down React, Vite, and the four Capacitor packages.
-
-3. Verify the dev server works in a browser (optional sanity check):
-
-   ```bash
-   npm run dev
-   ```
-
-   Open the URL it prints (usually `http://localhost:5173`). You should see Focl with the seed data. Quit with `Ctrl+C` once it looks right.
-
----
-
-## Step 2 — Add the Android platform
-
-This generates the `android/` folder containing a real Gradle Android project. Run **once**:
+## Getting started
 
 ```bash
-npm run build         # generates the dist/ web bundle
-npx cap add android   # creates android/ scaffolded with our config
+npm install
+npm run dev        # browser preview at http://localhost:5173
 ```
-
-If `cap add` complains it can't find `dist/`, run `npm run build` first.
-
----
-
-## Step 3 — Generate the launcher icon
-
-Capacitor scaffolds Android with a default icon. Replacing it is a one-time chore:
-
-1. Open Android Studio → **File → Open** → select the `android/` folder inside the project.
-2. Wait for Gradle sync (first time can take 5–10 minutes).
-3. In the Project pane (left), right-click `app/res` → **New → Image Asset**.
-4. Select **Launcher Icons (Adaptive and Legacy)**.
-5. For **Foreground Layer** → Asset Type: **Image** → choose `android-resources/icon-source.svg`. Resize/trim until it looks right inside the safe zone.
-6. For **Background Layer** → Color → `#0E0E10`.
-7. Click Next → Finish. This generates all density variants.
-
-> Skip this step the first time if you want — you can come back to it later. The default icon is just ugly, not broken.
-
----
-
-## Step 4 — Allow `INTERNET` is NOT required, but notifications need permission
-
-The app is fully offline; no network permission is needed. Notifications work via the local Android scheduler.
-
-Open `android/app/src/main/AndroidManifest.xml`. Capacitor already added what's needed. If it didn't, add inside `<manifest>`:
-
-```xml
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-<uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
-```
-
-The plugin's docs cover this — the install pulls in the right manifest entries automatically in current versions.
-
----
-
-## Step 5 — Build a debug APK (the easy path)
-
-This is enough for personal use — no Play Store, no signing ceremony.
 
 ```bash
-npm run android:sync   # rebuilds web + copies into android/
+npm run lint       # ESLint
+npm test           # Vitest (run once)
+npm run test:watch # Vitest watch mode
+npm run build      # production web bundle
 ```
 
-Then in Android Studio:
-
-1. **Build → Build Bundle(s) / APK(s) → Build APK(s)**.
-2. When done, a notification appears at the bottom — click **locate**.
-3. The file is at `android/app/build/outputs/apk/debug/app-debug.apk`.
-
-**Or from the command line:**
+### Build the Android app
 
 ```bash
-cd android
-./gradlew assembleDebug     # macOS / Linux
-# or: gradlew.bat assembleDebug     # Windows
+npm run android:init   # one-time: scaffolds the android/ project
+npm run android:open    # build web, sync, open in Android Studio
 ```
 
-Same output location.
+Full device-by-device instructions (SDK setup, signing, sideloading) live in **[GUIDE.md](./GUIDE.md)**.
 
----
+## Testing
 
-## Step 6 — Install on the iqoo 12
+63 unit tests cover the pure logic — date/recurrence math, streak computation, the state reducer, and daily maintenance (roll-forward, cleanup, archiving). Tests pin a fake clock and `TZ=UTC` so results never depend on when or where they run. CI runs lint, tests and build on every push and pull request.
 
-### Option A — USB (fastest)
+## Roadmap
 
-1. Plug the iqoo 12 into your computer with a data-capable USB cable.
-2. On the phone, accept "Allow USB debugging from this computer".
-3. From the project root:
+- [x] Lint/test/CI foundation
+- [x] Pure reducer state layer + timezone, import and archive fixes
+- [ ] Native Kotlin home-screen widget
+- [ ] Alarm-based reminders (reliable on aggressive OEMs)
+- [ ] Subtasks, drag-to-reorder, habit heatmap, calendar month view
+- [ ] Incremental TypeScript migration
 
-   ```bash
-   adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-   ```
+## License
 
-   (`adb` is in `~/Library/Android/sdk/platform-tools` on macOS or `%LOCALAPPDATA%\Android\Sdk\platform-tools` on Windows — add it to PATH or use the full path.)
-
-4. Focl appears in your app drawer.
-
-### Option B — Transfer + install
-
-1. Copy `app-debug.apk` to the phone via Files, Telegram-to-self, Drive, etc.
-2. On iqoo: **Settings → Apps & permissions → Install unknown apps** → enable your file manager.
-3. Open the APK, tap Install.
-
-### Option C — Run + install in one shot from Android Studio
-
-With the phone plugged in and USB debugging on, click the green **Run ▶** button in Android Studio (top bar) with your phone selected in the device dropdown. Builds, installs, and launches the app automatically. Best for iterating.
-
----
-
-## Step 7 — Grant notification permission on first launch
-
-The first time you open Focl on Android 13+, you'll get the standard notifications permission prompt. Allow it, otherwise reminders silently no-op.
-
-Then create a task with a reminder set to "10 min before" and a deadline a few minutes in the future to confirm it fires.
-
----
-
-## Iterating
-
-After any code change:
-
-```bash
-npm run android:sync   # rebuild web + copy
-# then either:
-#   - Click Run ▶ in Android Studio  (recommended)
-#   - or rebuild APK and reinstall via adb
-```
-
-For live reload during heavy iteration, run `npm run dev` and on the phone open `http://YOUR-LAPTOP-IP:5173` in Chrome. You lose native APIs (notifications, native preferences) but the UI iterates instantly.
-
----
-
-## Signing for "release" builds (optional)
-
-A debug APK works fine for personal use, but Android shows a warning the first install and the app can't be auto-updated through a store. If you want a clean release-signed build:
-
-1. In Android Studio: **Build → Generate Signed Bundle / APK → APK**.
-2. Create a new keystore — **save the keystore file and password somewhere safe**, you need them to ship updates.
-3. Select `release` build variant, V1 + V2 signatures.
-4. Output goes to `android/app/release/app-release.apk`.
-
-You can install this the same way. Signature mismatches will prevent updating from a debug version, so pick one path early.
-
----
-
-## Troubleshooting
-
-**`adb: command not found`** → Add platform-tools to your PATH, or use the full path: `~/Library/Android/sdk/platform-tools/adb install …`
-
-**Gradle sync fails on first open** → Open `android/build.gradle` and verify it picked up your installed SDK. Android Studio's "Project Structure" dialog (Cmd/Ctrl+;) is the safest way to fix path mismatches.
-
-**APK installs but app crashes on launch** → Check `adb logcat | grep -i focl` while reopening. 95% of crashes here are because `npm run build` wasn't run before `cap sync`.
-
-**Notifications don't fire** → On iqoo, also check Settings → Battery → Manage background activity → Focl → "No restrictions". Vivo/iqoo are aggressive about killing background scheduled work.
-
-**App icon is still the default** → You skipped Step 3 or didn't re-sync. Run `npm run android:sync` and rebuild.
-
-**Data disappeared after reinstall** → Capacitor Preferences are tied to the app package + install. Use Profile → Export before reinstalling. Same package ID + same signature = data persists.
-
----
-
-## Future additions if you want them later
-
-- **Subtasks** inside a task (add a `subtasks: []` field, render as nested checklist on edit)
-- **Drag-to-reorder** within sections (react-dnd or a lighter touch library)
-- **Calendar month view** for events
-- **Per-habit history view** (heatmap calendar)
-- **Widgets** (Android home-screen widget — needs native Kotlin, not just web)
-- **Cloud sync** (if you stop wanting it to be personal-only — Supabase or Pocketbase work well)
-
-Ask and I'll wire any of these in.
+[MIT](./LICENSE) © XDefoeRedstoneX
