@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { intId, buildFireDate } from './notifications.js';
+import { intId, buildFireDate, buildNotificationSpecs } from './notifications.js';
 
 describe('intId', () => {
   it('is deterministic for the same input', () => {
@@ -47,5 +47,77 @@ describe('buildFireDate', () => {
   it('treats unknown timings as zero offset', () => {
     expect(buildFireDate('custom', '14:30', ref)).toEqual(at('14:30'));
     expect(buildFireDate('bogus', '14:30', ref)).toEqual(at('14:30'));
+  });
+});
+
+describe('buildNotificationSpecs', () => {
+  // 2026-06-15 is a Monday
+  const NOW = new Date('2026-06-01T00:00:00').getTime();
+  const task = (over = {}) => ({
+    id: 't1', name: 'Pay rent', notes: '',
+    deadline: '2026-06-15', recurrence: 'none', customDays: [],
+    notifications: [{ timing: 'on-day', time: '09:00' }],
+    ...over,
+  });
+
+  it('returns nothing without reminders', () => {
+    expect(buildNotificationSpecs(task({ notifications: [] }), 'task', NOW)).toEqual([]);
+  });
+
+  it('builds a one-shot for non-recurring items, skipping past times', () => {
+    const specs = buildNotificationSpecs(task(), 'task', NOW);
+    expect(specs).toHaveLength(1);
+    expect(specs[0].schedule).toEqual({ at: new Date('2026-06-15T09:00:00'), allowWhileIdle: true });
+    expect(specs[0].title).toBe('Pay rent');
+    expect(specs[0].channelId).toBe('focl-reminders');
+
+    const past = new Date('2026-07-01T00:00:00').getTime();
+    expect(buildNotificationSpecs(task(), 'task', past)).toEqual([]);
+  });
+
+  it('daily recurrence repeats by time-of-day', () => {
+    const specs = buildNotificationSpecs(task({ recurrence: 'daily' }), 'task', NOW);
+    expect(specs).toHaveLength(1);
+    expect(specs[0].schedule).toEqual({ on: { hour: 9, minute: 0 } });
+  });
+
+  it('weekly recurrence repeats on the fire weekday (Sunday-first numbering)', () => {
+    const specs = buildNotificationSpecs(task({ recurrence: 'weekly' }), 'task', NOW);
+    expect(specs[0].schedule).toEqual({ on: { weekday: 2, hour: 9, minute: 0 } }); // Monday
+  });
+
+  it('weekdays recurrence expands to five repeating schedules', () => {
+    const specs = buildNotificationSpecs(task({ recurrence: 'weekdays' }), 'task', NOW);
+    expect(specs.map(s => s.schedule.on.weekday)).toEqual([2, 3, 4, 5, 6]);
+    // each expansion gets its own stable id
+    expect(new Set(specs.map(s => s.id)).size).toBe(5);
+  });
+
+  it('custom recurrence maps the selected day keys', () => {
+    const specs = buildNotificationSpecs(
+      task({ recurrence: 'custom', customDays: ['Mon', 'Fri'] }), 'task', NOW);
+    expect(specs.map(s => s.schedule.on.weekday)).toEqual([2, 6]);
+  });
+
+  it('monthly recurrence repeats on the day of month', () => {
+    const specs = buildNotificationSpecs(task({ recurrence: 'monthly' }), 'task', NOW);
+    expect(specs[0].schedule).toEqual({ on: { day: 15, hour: 9, minute: 0 } });
+  });
+
+  it('biweekly arms the next future occurrence as a one-shot', () => {
+    const later = new Date('2026-06-20T00:00:00').getTime();
+    const specs = buildNotificationSpecs(task({ recurrence: 'biweekly' }), 'task', later);
+    expect(specs[0].schedule).toEqual({ at: new Date('2026-06-29T09:00:00'), allowWhileIdle: true });
+  });
+
+  it('uses the event start date as the reference for events', () => {
+    const ev = {
+      id: 'e1', name: 'Standup', notes: '', recurrence: 'none', customDays: [],
+      startDatetime: '2026-06-15T09:30', endDatetime: '2026-06-15T09:45',
+      notifications: [{ timing: '10min', time: '09:30' }],
+    };
+    const specs = buildNotificationSpecs(ev, 'event', NOW);
+    expect(specs[0].schedule.at).toEqual(new Date('2026-06-15T09:20:00'));
+    expect(specs[0].body).toBe('Event reminder');
   });
 });

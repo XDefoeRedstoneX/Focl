@@ -121,8 +121,8 @@ Full device-by-device instructions (SDK setup, signing, sideloading) live in **[
 
 - [x] Lint/test/CI foundation
 - [x] Pure reducer state layer + timezone, import and archive fixes
+- [x] Reliable reminders: repeating schedules, startup resync, high-importance channel, exact-alarm surfacing
 - [ ] Native Kotlin home-screen widget
-- [ ] Alarm-based reminders (reliable on aggressive OEMs)
 - [ ] Subtasks, drag-to-reorder, habit heatmap, calendar month view
 - [ ] Incremental TypeScript migration
 

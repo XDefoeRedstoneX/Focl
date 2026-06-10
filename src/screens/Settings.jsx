@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import pkg from '../../package.json';
 import { C, card, screenTitle, screenPad, sectionLabel, rowStyle } from '../lib/theme.js';
 import { Toggle, Confirm, Chip } from '../components/ui.jsx';
 import { exportLocal, exportShare, pickAndReadJSON } from '../lib/fileio.js';
-import { testNotification } from '../lib/notifications.js';
+import { testNotification, getNotificationStatus, requestExactAlarms } from '../lib/notifications.js';
 
 /**
  * Settings - real preferences. Replaces the old Profile screen.
@@ -11,6 +11,14 @@ import { testNotification } from '../lib/notifications.js';
 export function Settings({ settings, updateSettings, state, importState, resetAll, stats, setScreen, showToast }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [lastExportPath, setLastExportPath] = useState(null);
+  const [notifStatus, setNotifStatus] = useState(null);
+
+  useEffect(() => { getNotificationStatus().then(setNotifStatus); }, []);
+
+  const doExactAlarms = async () => {
+    const exactAlarms = await requestExactAlarms();
+    setNotifStatus(s => ({ ...s, exactAlarms }));
+  };
 
   const buildPayload = () => ({
     version: 2,
@@ -149,12 +157,36 @@ export function Settings({ settings, updateSettings, state, importState, resetAl
 
       {/* Notifications */}
       <div style={sectionLabel}>Notifications</div>
-      <div style={{ ...card, overflow: 'hidden', marginBottom: 20 }}>
+      <div style={{ ...card, overflow: 'hidden', marginBottom: 8 }}>
+        {notifStatus?.native && (
+          <>
+            <div style={rowStyle}>
+              <div>
+                <div style={{ fontSize: 14 }}>Permission</div>
+                <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>System notification access</div>
+              </div>
+              <StatusPill ok={notifStatus.permission === 'granted'} label={notifStatus.permission} />
+            </div>
+            {notifStatus.exactAlarms !== 'unknown' && (
+              <div onClick={doExactAlarms} style={{ ...rowStyle, borderTop: `0.5px solid ${C.border}`, cursor: 'pointer' }}>
+                <div>
+                  <div style={{ fontSize: 14 }}>Exact alarms</div>
+                  <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Needed for on-time reminders — tap to change</div>
+                </div>
+                <StatusPill ok={notifStatus.exactAlarms === 'granted'} label={notifStatus.exactAlarms} />
+              </div>
+            )}
+          </>
+        )}
         <Row
           label="Send a test notification"
           sub="Fires in ~8 seconds if everything's set up"
           onClick={doTestNotif}
+          borderTop={!!notifStatus?.native}
         />
+      </div>
+      <div style={{ fontSize: 11, color: C.t3, marginBottom: 20, padding: '0 4px' }}>
+        Reminders still silent? Allow background activity: system Settings → Battery → Focl → No restrictions.
       </div>
 
       {/* At a glance */}
@@ -244,6 +276,18 @@ function Row({ label, sub, onClick, borderTop, danger }) {
       </div>
       {onClick && <span style={{ color: C.t3 }}>›</span>}
     </div>
+  );
+}
+
+function StatusPill({ ok, label }) {
+  const color = ok ? C.green : C.red;
+  return (
+    <span style={{
+      padding: '3px 10px', borderRadius: 100,
+      border: `0.5px solid ${color}`, color,
+      background: `${color}1a`,
+      fontSize: 11, fontFamily: 'DM Mono',
+    }}>{label}</span>
   );
 }
 
