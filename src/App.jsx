@@ -6,7 +6,7 @@ import { C, fonts } from './lib/theme.js';
 import { todayISO, newId, setWeekStart } from './lib/helpers.js';
 import { loadState, saveStateField } from './lib/storage.js';
 import { DEFAULTS } from './lib/seed.js';
-import { scheduleItem, cancelItem } from './lib/notifications.js';
+import { initNotifications, resyncAll, scheduleItem, cancelItem } from './lib/notifications.js';
 import { setHapticsEnabled, tapLight, tapMedium } from './lib/haptics.js';
 import {
   reducer, initialState, DEFAULT_SETTINGS, PERSISTED_KEYS,
@@ -96,8 +96,10 @@ export default function App() {
 
   const { spaces, tasks, events, habits, settings, archive, kits, plan, sessions } = state;
 
-  // Initial load: hydrate, run daily maintenance (pure), reschedule the
-  // notifications of any tasks that rolled forward, then publish.
+  // Initial load: hydrate, run daily maintenance (pure), then re-arm every
+  // reminder. The full resync (rather than only rolled tasks) repairs items
+  // saved before notification permission was granted and alarms dropped by
+  // reboots or OEM battery managers.
   useEffect(() => {
     (async () => {
       const s = await loadState(DEFAULTS);
@@ -105,10 +107,11 @@ export default function App() {
       // weekISO must respect the user's week start before archiving runs
       setWeekStart(s.settings.weekStartsOn);
 
-      const { state: next, rolledTasks } = runDailyMaintenance(s);
-      for (const t of rolledTasks) {
-        cancelItem(t.id).then(() => scheduleItem(t, 'task')).catch(() => {});
-      }
+      const { state: next } = runDailyMaintenance(s);
+
+      initNotifications()
+        .then(() => resyncAll(next.tasks, next.events))
+        .catch(() => {});
 
       dispatch({ type: 'load', state: next });
       setLoaded(true);
