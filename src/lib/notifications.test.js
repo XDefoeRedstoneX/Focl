@@ -70,6 +70,9 @@ describe('buildNotificationSpecs', () => {
     expect(specs[0].schedule).toEqual({ at: new Date('2026-06-15T09:00:00'), allowWhileIdle: true });
     expect(specs[0].title).toBe('Pay rent');
     expect(specs[0].channelId).toBe('focl-reminders');
+    // task reminders are sticky until completed
+    expect(specs[0].ongoing).toBe(true);
+    expect(specs[0].autoCancel).toBe(false);
 
     const past = new Date('2026-07-01T00:00:00').getTime();
     expect(buildNotificationSpecs(task(), 'task', past)).toEqual([]);
@@ -119,5 +122,8 @@ describe('buildNotificationSpecs', () => {
     const specs = buildNotificationSpecs(ev, 'event', NOW);
     expect(specs[0].schedule.at).toEqual(new Date('2026-06-15T09:20:00'));
     expect(specs[0].body).toBe('Event reminder');
+    // events stay dismissable
+    expect(specs[0].ongoing).toBe(false);
+    expect(specs[0].autoCancel).toBe(true);
   });
 });

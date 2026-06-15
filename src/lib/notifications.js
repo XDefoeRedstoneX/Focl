@@ -117,6 +117,10 @@ export function buildNotificationSpecs(item, kind, now = Date.now()) {
         title: item.name,
         body: item.notes || (kind === 'task' ? 'Task reminder' : 'Event reminder'),
         channelId: CHANNEL_ID,
+        // Tasks stay in the shade until completed (completing cancels them);
+        // events are informational and dismissable as usual.
+        ongoing: kind === 'task',
+        autoCancel: kind !== 'task',
         schedule,
       });
     }

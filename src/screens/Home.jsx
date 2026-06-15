@@ -83,21 +83,38 @@ export function Home({
         >+ Manage</button>
       </div>
 
-      {/* Tab switcher */}
-      <div style={{ display: 'flex', gap: 24, marginTop: 20, borderBottom: `0.5px solid ${C.border}` }}>
-        {['tasks', 'events'].map(t => (
-          <button
-            key={t}
-            onClick={() => setHomeTab(t)}
-            style={{
-              background: 'none', border: 'none', padding: '0 0 10px',
-              fontSize: 14, fontWeight: 500,
-              color: homeTab === t ? C.t1 : C.t3,
-              borderBottom: homeTab === t ? `2px solid ${C.amber}` : '2px solid transparent',
-              textTransform: 'capitalize', cursor: 'pointer',
-            }}
-          >{t}</button>
-        ))}
+      {/* Tab switcher — segmented control */}
+      <div style={{
+        display: 'flex', gap: 4, padding: 4, marginTop: 20,
+        background: C.s1, border: `0.5px solid ${C.border}`, borderRadius: 100,
+      }}>
+        {[['tasks', 'Tasks'], ['events', 'Events']].map(([t, label]) => {
+          const active = homeTab === t;
+          const count = t === 'tasks' ? dueToday.length + upcoming.length : todayEvents.length;
+          return (
+            <button
+              key={t}
+              onClick={() => setHomeTab(t)}
+              style={{
+                flex: 1, padding: '9px 0', borderRadius: 100, border: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                background: active ? C.amber : 'transparent',
+                color: active ? C.bg : C.t2,
+                fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              {label}
+              {count > 0 && (
+                <span style={{
+                  fontSize: 11, fontFamily: 'DM Mono', lineHeight: 1,
+                  padding: '2px 6px', borderRadius: 100,
+                  background: active ? 'rgba(12,20,22,0.18)' : C.s3,
+                  color: active ? C.bg : C.t3,
+                }}>{count}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {homeTab === 'tasks' ? (

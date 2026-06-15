@@ -189,7 +189,14 @@ export default function App() {
 
   const toggleTask = (id) => {
     tapLight();
+    const task = tasks.find(t => t.id === id);
     dispatch({ type: 'task/toggle', id });
+    // A task reminder is sticky (non-dismissable) until the task is done.
+    // Completing it clears the notification; un-completing re-arms it.
+    if (task?.notifications?.length) {
+      if (task.done) scheduleItem({ ...task, done: false }, 'task').catch(() => {});
+      else cancelItem(id).catch(() => {});
+    }
   };
 
   const deleteTask = (id) => {
