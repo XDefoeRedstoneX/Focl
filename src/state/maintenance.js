@@ -7,7 +7,7 @@
 
 import {
   todayISO, addDays, weekISO, weekDaysFrom,
-  nextOccurrence, countEventsInWeek,
+  nextOccurrence, countEventsInWeek, habitWeeklyTarget,
 } from '../lib/helpers.js';
 
 export function runDailyMaintenance(state, today = todayISO()) {
@@ -114,10 +114,7 @@ export function buildWeekSnapshot(weekStart, { tasks, events, habits, spaces }) 
     perHabit: habits.map(h => ({
       id: h.id, name: h.name, color: h.color,
       done: week.filter(d => h.completions.includes(d)).length,
-      target: h.frequency === 'daily' ? 7
-            : h.frequency === 'weekdays' ? 5
-            : h.frequency === '3x' ? 3
-            : (h.customDays || []).length,
+      target: habitWeeklyTarget(h),
     })),
     perSpace: spaces.map(sp => {
       const sTasks = tasks.filter(t => t.spaceId === sp.id);

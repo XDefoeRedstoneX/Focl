@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { C, card, screenTitle, screenPad, sectionTitle, sectionLabel, dot, monoMicro, accentTint } from '../lib/theme.js';
-import { weekDaysFrom, weekISO, countEventsInWeek } from '../lib/helpers.js';
+import { weekDaysFrom, weekISO, countEventsInWeek, habitWeeklyTarget } from '../lib/helpers.js';
 
 /**
  * Analytics: current week's stats + archived past weeks.
@@ -93,7 +93,7 @@ function computeCurrentWeek({ tasks, events, habits, spaces }) {
   const perHabit = habits.map(h => ({
     id: h.id, name: h.name, color: h.color,
     done: week.filter(d => h.completions.includes(d)).length,
-    target: countHabitTargetsInWeek(h),
+    target: habitWeeklyTarget(h),
   }));
 
   // per-space breakdown
@@ -126,12 +126,6 @@ function computeCurrentWeek({ tasks, events, habits, spaces }) {
   };
 }
 
-function countHabitTargetsInWeek(h) {
-  if (h.frequency === 'daily') return 7;
-  if (h.frequency === 'weekdays') return 5;
-  if (h.frequency === '3x') return 3;
-  return h.customDays.length;
-}
 
 function formatWeek(week) {
   const start = new Date(week[0] + 'T00:00:00');
