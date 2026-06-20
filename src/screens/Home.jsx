@@ -90,7 +90,10 @@ export function Home({
       }}>
         {[['tasks', 'Tasks'], ['events', 'Events']].map(([t, label]) => {
           const active = homeTab === t;
-          const count = t === 'tasks' ? dueToday.length + upcoming.length : todayEvents.length;
+          const overdueShown = settings?.showOverdue !== false ? overdue.length : 0;
+          const count = t === 'tasks'
+            ? overdueShown + dueToday.length + upcoming.length
+            : todayEvents.length;
           return (
             <button
               key={t}
