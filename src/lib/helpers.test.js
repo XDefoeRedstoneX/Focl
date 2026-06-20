@@ -3,6 +3,7 @@ import {
   todayISO, addDays, fmtTime, getDayKey,
   setWeekStart, weekISO, weekDaysFrom, newId,
   nextOccurrence, isHabitDueOn, computeStreak,
+  habitWeeklyTarget, CAP_WEEKDAY,
 } from './helpers.js';
 
 // 2026-06-10 is a Wednesday — fixed reference point for everything below.
@@ -201,5 +202,23 @@ describe('computeStreak', () => {
   it('skips non-due days for custom habits', () => {
     // due Wed & Fri: today (Wed) + last Fri done, Wed before that missed
     expect(computeStreak(['2026-06-10', '2026-06-05'], 'custom', ['Wed', 'Fri'])).toBe(2);
+  });
+});
+
+describe('habitWeeklyTarget', () => {
+  it('maps each frequency to a weekly target', () => {
+    expect(habitWeeklyTarget({ frequency: 'daily' })).toBe(7);
+    expect(habitWeeklyTarget({ frequency: 'weekdays' })).toBe(5);
+    expect(habitWeeklyTarget({ frequency: '3x' })).toBe(3);
+    expect(habitWeeklyTarget({ frequency: 'custom', customDays: ['Mon', 'Wed', 'Fri'] })).toBe(3);
+    expect(habitWeeklyTarget({ frequency: 'custom' })).toBe(0);
+  });
+});
+
+describe('CAP_WEEKDAY', () => {
+  it('numbers weekdays Sunday-first 1–7 for Capacitor', () => {
+    expect(CAP_WEEKDAY.Sun).toBe(1);
+    expect(CAP_WEEKDAY.Mon).toBe(2);
+    expect(CAP_WEEKDAY.Sat).toBe(7);
   });
 });

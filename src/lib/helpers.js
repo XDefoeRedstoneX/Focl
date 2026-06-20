@@ -37,6 +37,16 @@ export const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export const getDayKey = (d) => weekDays[(d.getDay() + 6) % 7];
 
+// Capacitor LocalNotifications weekday numbers (Sunday=1 … Saturday=7).
+export const CAP_WEEKDAY = { Sun: 1, Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6, Sat: 7 };
+
+// How many times a habit is expected to be done in a 7-day week.
+export const habitWeeklyTarget = (habit) =>
+  habit.frequency === 'daily' ? 7
+  : habit.frequency === 'weekdays' ? 5
+  : habit.frequency === '3x' ? 3
+  : (habit.customDays || []).length;
+
 // Module-level week-start setting. App.jsx calls setWeekStart() when the
 // user's preference loads/changes; every weekISO/weekDaysFrom caller then
 // picks it up automatically without prop-threading.

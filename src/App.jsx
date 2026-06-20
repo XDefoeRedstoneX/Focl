@@ -191,9 +191,11 @@ export default function App() {
     tapLight();
     const task = tasks.find(t => t.id === id);
     dispatch({ type: 'task/toggle', id });
-    // A task reminder is sticky (non-dismissable) until the task is done.
-    // Completing it clears the notification; un-completing re-arms it.
-    if (task?.notifications?.length) {
+    // A one-off task's reminder is sticky until the task is done: completing
+    // clears it, un-completing re-arms it. Recurring tasks are left alone —
+    // their repeating schedule must keep firing for future occurrences.
+    const oneOff = !task?.recurrence || task.recurrence === 'none';
+    if (task?.notifications?.length && oneOff) {
       if (task.done) scheduleItem({ ...task, done: false }, 'task').catch(() => {});
       else cancelItem(id).catch(() => {});
     }

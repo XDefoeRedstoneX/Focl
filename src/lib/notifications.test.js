@@ -107,6 +107,30 @@ describe('buildNotificationSpecs', () => {
     expect(specs[0].schedule).toEqual({ on: { day: 15, hour: 9, minute: 0 } });
   });
 
+  it('monthly on days 29–31 falls back to a one-shot (date-match would skip short months)', () => {
+    const specs = buildNotificationSpecs(
+      task({ recurrence: 'monthly', deadline: '2026-06-30' }), 'task', NOW);
+    expect(specs[0].schedule).toEqual({ at: new Date('2026-06-30T09:00:00'), allowWhileIdle: true });
+  });
+
+  it('does not arm a completed one-off task (and resync cannot resurrect it)', () => {
+    expect(buildNotificationSpecs(task({ done: true }), 'task', NOW)).toEqual([]);
+  });
+
+  it('still arms a completed recurring task — future occurrences need it', () => {
+    const specs = buildNotificationSpecs(task({ done: true, recurrence: 'daily' }), 'task', NOW);
+    expect(specs[0].schedule).toEqual({ on: { hour: 9, minute: 0 } });
+  });
+
+  it('caps specs at MAX_NOTIFS_PER_ITEM so ids stay within cancel range', () => {
+    const manyRules = Array.from({ length: 10 }, () => ({ timing: 'on-day', time: '09:00' }));
+    const specs = buildNotificationSpecs(
+      task({ recurrence: 'weekdays', notifications: manyRules }), 'task', NOW);
+    // 10 rules × 5 weekdays = 50 uncapped; capped to 32
+    expect(specs.length).toBe(32);
+    expect(new Set(specs.map(s => s.id)).size).toBe(32);
+  });
+
   it('biweekly arms the next future occurrence as a one-shot', () => {
     const later = new Date('2026-06-20T00:00:00').getTime();
     const specs = buildNotificationSpecs(task({ recurrence: 'biweekly' }), 'task', later);
