@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { C, card, sectionTitle, screenTitle, dot, inp, screenPad, SWATCHES } from '../lib/theme.js';
 import { weekISO } from '../lib/helpers.js';
 import { Empty, Confirm } from '../components/ui.jsx';
-import { SwipeRow } from '../components/SwipeRow.jsx';
-import { RowMenu } from '../components/RowMenu.jsx';
 
 export function Spaces({ spaces, saveSpace, deleteSpace, tasks, habits, setScreen }) {
   const week = weekISO();
@@ -65,33 +63,29 @@ export function Spaces({ spaces, saveSpace, deleteSpace, tasks, habits, setScree
         const pct = slots ? Math.round((filled / slots) * 100) : 0;
 
         return (
-          <SwipeRow
+          <div
             key={s.id}
-            onTap={() => startEdit(s)}
-            actions={[
-              { label: 'Edit', color: C.blue, onClick: () => startEdit(s) },
-              { label: 'Delete', color: C.red, onClick: () => setConfirmDelete(s) },
-            ]}
+            onClick={() => startEdit(s)}
+            style={{ ...card, padding: 16, marginBottom: 8, cursor: 'pointer' }}
           >
-            <div style={{ ...card, padding: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <span style={dot(s.color, 12)} />
-                <span style={{ fontSize: 16, fontWeight: 500, flex: 1 }}>{s.name}</span>
-                <RowMenu actions={[
-                  { label: 'Edit', onClick: () => startEdit(s) },
-                  { label: 'Delete', color: C.red, onClick: () => setConfirmDelete(s) },
-                ]} />
-              </div>
-              <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
-                {statCell('Tasks', sTasks.length)}
-                {statCell('Habits', sHabits.length)}
-                {statCell('Week', `${pct}%`)}
-              </div>
-              <div style={{ height: 4, background: C.s3, borderRadius: 100, overflow: 'hidden' }}>
-                <div style={{ width: `${pct}%`, height: '100%', background: s.color }} />
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={dot(s.color, 12)} />
+              <span style={{ fontSize: 16, fontWeight: 500, flex: 1 }}>{s.name}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setConfirmDelete(s); }}
+                aria-label="Delete"
+                style={{ background: 'none', border: 'none', color: C.t3, fontSize: 17, cursor: 'pointer', padding: 4 }}
+              >×</button>
             </div>
-          </SwipeRow>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
+              {statCell('Tasks', sTasks.length)}
+              {statCell('Habits', sHabits.length)}
+              {statCell('Week', `${pct}%`)}
+            </div>
+            <div style={{ height: 4, background: C.s3, borderRadius: 100, overflow: 'hidden' }}>
+              <div style={{ width: `${pct}%`, height: '100%', background: s.color }} />
+            </div>
+          </div>
         );
       })}
 
