@@ -122,11 +122,11 @@ export function Toast({ message = 'Saved!' }) {
   );
 }
 
-export function Stat({ label, value, suffix }) {
+export function Stat({ label, value, suffix, color }) {
   return (
     <div style={{ ...card, padding: 12 }}>
       <div style={{ ...sectionTitle, fontSize: 9 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 500, marginTop: 6, fontFamily: 'DM Mono' }}>
+      <div style={{ fontSize: 22, fontWeight: 500, marginTop: 6, fontFamily: 'DM Mono', color: color || C.t1 }}>
         {value}<span style={{ fontSize: 12, color: C.t3 }}>{suffix}</span>
       </div>
     </div>

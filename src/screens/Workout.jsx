@@ -133,10 +133,11 @@ function Today({ kits, plan, sessions, upsertSession }) {
                     <button key={i}
                       onClick={() => setDone(e.id, filled && i === done - 1 ? i : i + 1)}
                       style={{
-                        width: 30, height: 30, borderRadius: 100, padding: 0, cursor: 'pointer',
+                        width: 32, height: 32, borderRadius: 100, padding: 0, cursor: 'pointer',
                         border: `1.5px solid ${filled ? kit.color : C.border}`,
                         background: filled ? kit.color : 'transparent',
                         color: filled ? C.bg : C.t3, fontSize: 12, fontFamily: 'DM Mono',
+                        transition: 'all .15s',
                       }}
                     >{i + 1}</button>
                   );
