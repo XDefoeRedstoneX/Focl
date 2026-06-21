@@ -90,8 +90,6 @@ export default function App() {
   const [screen, setScreen] = useState('home');
   const screenRef = useRef(screen);
   useEffect(() => { screenRef.current = screen; }, [screen]);
-  const [filter, setFilter] = useState('all');
-  const [homeTab, setHomeTab] = useState('tasks');
   const [draft, setDraft] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [toast, setToast] = useState(null);
@@ -433,13 +431,10 @@ export default function App() {
             {screen === 'home' && (
               <Home
                 tasks={tasks} events={events} habits={habits} spaces={spaces}
-                filter={filter} setFilter={setFilter}
-                homeTab={homeTab} setHomeTab={setHomeTab}
-                toggleTask={toggleTask} toggleHabitDay={toggleHabitDay}
-                setScreen={setScreen} openEdit={openEdit}
-                quickAddTask={quickAddTask}
-                deleteTask={deleteTask} deleteEvent={deleteEvent}
                 settings={settings}
+                toggleTask={toggleTask} toggleHabitDay={toggleHabitDay}
+                deleteTask={deleteTask} openEdit={openEdit}
+                quickAddTask={quickAddTask} setScreen={setScreen}
               />
             )}
             {screen === 'plan' && (
