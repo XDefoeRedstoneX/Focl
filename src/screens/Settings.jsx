@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import pkg from '../../package.json';
-import { C, card, screenTitle, screenPad, sectionLabel, rowStyle } from '../lib/theme.js';
+import { C, card, sectionLabel, rowStyle } from '../lib/theme.js';
 import { Toggle, Confirm, Chip } from '../components/ui.jsx';
 import { exportLocal, exportShare, pickAndReadJSON } from '../lib/fileio.js';
 import { testNotification, getNotificationStatus, requestExactAlarms } from '../lib/notifications.js';
@@ -69,12 +69,7 @@ export function Settings({ settings, updateSettings, state, importState, resetAl
   };
 
   return (
-    <div style={screenPad}>
-      <div style={screenTitle}>Settings</div>
-      <div style={{ fontSize: 12, color: C.t2, marginTop: 4, marginBottom: 20 }}>
-        Preferences & data
-      </div>
-
+    <div style={{ padding: '8px 20px 8px' }}>
       {/* Quick links */}
       <div style={sectionLabel}>Manage</div>
       <div style={{ ...card, overflow: 'hidden', marginBottom: 20 }}>

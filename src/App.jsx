@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { C, fonts } from './lib/theme.js';
-import { todayISO, newId, setWeekStart } from './lib/helpers.js';
+import { todayISO, newId, setWeekStart, greeting, dateKicker } from './lib/helpers.js';
 import { loadState, saveStateField } from './lib/storage.js';
 import { DEFAULTS } from './lib/seed.js';
 import { initNotifications, resyncAll, scheduleItem, cancelItem } from './lib/notifications.js';
@@ -15,8 +15,10 @@ import {
 import { runDailyMaintenance } from './state/maintenance.js';
 
 import { BottomNav } from './components/BottomNav.jsx';
+import { Header } from './components/Header.jsx';
 import { Toast } from './components/ui.jsx';
 import { Home } from './screens/Home.jsx';
+import { Plan } from './screens/Plan.jsx';
 import { Habits } from './screens/Habits.jsx';
 import { AddEdit } from './screens/AddEdit.jsx';
 import { Notif } from './screens/Notif.jsx';
@@ -394,6 +396,18 @@ export default function App() {
     bestStreak: Math.max(0, ...habits.map(h => h.streakBest || 0)),
   }), [tasks, events, habits]);
 
+  // Shared header copy per screen. Sub-screens (add/notif/spaces) carry
+  // their own top bars, so they get no shared header (null).
+  const headerFor = (s) => ({
+    home: { kicker: dateKicker(), title: greeting() },
+    plan: { kicker: 'This week', title: 'Plan' },
+    habits: { kicker: 'Daily rituals', title: 'Habits' },
+    workout: { kicker: kits.length ? kits.map(k => k.name).join(' / ') : 'Workout', title: 'Train' },
+    analytics: { kicker: 'This week', title: 'Insights' },
+    settings: { kicker: 'Preferences & data', title: 'Settings' },
+  }[s] || null);
+  const header = headerFor(screen);
+
   return (
     <>
       <style>{fonts}</style>
@@ -412,6 +426,9 @@ export default function App() {
             paddingTop: 'env(safe-area-inset-top)',
             paddingBottom: 80,
           }}>
+            {header && (
+              <Header kicker={header.kicker} title={header.title} screen={screen} setScreen={setScreen} />
+            )}
             <div key={screen} className="fade-in">
             {screen === 'home' && (
               <Home
@@ -423,6 +440,12 @@ export default function App() {
                 quickAddTask={quickAddTask}
                 deleteTask={deleteTask} deleteEvent={deleteEvent}
                 settings={settings}
+              />
+            )}
+            {screen === 'plan' && (
+              <Plan
+                tasks={tasks} events={events} spaces={spaces}
+                openEdit={openEdit}
               />
             )}
             {screen === 'habits' && (

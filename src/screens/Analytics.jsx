@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { C, card, screenTitle, screenPad, sectionTitle, sectionLabel, dot, monoMicro, accentTint } from '../lib/theme.js';
+import { C, card, sectionTitle, sectionLabel, dot, monoMicro, accentTint } from '../lib/theme.js';
 import { weekDaysFrom, weekISO, countEventsInWeek, habitWeeklyTarget } from '../lib/helpers.js';
 
 /**
@@ -22,9 +22,8 @@ export function Analytics({ tasks, events, habits, spaces, archive }) {
     : allWeeks.find(w => w.weekStart === activeWeek) || allWeeks[0];
 
   return (
-    <div style={screenPad}>
-      <div style={screenTitle}>Analytics</div>
-      <div style={{ fontSize: 12, color: C.t2, marginTop: 4, marginBottom: 20 }}>
+    <div style={{ padding: '8px 20px 8px' }}>
+      <div style={{ fontSize: 12, color: C.t2, marginBottom: 20 }}>
         Weekly snapshot · {active.label}
       </div>
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { C, card, monoMicro, sectionTitle, screenTitle, dot, inp, screenPad } from '../lib/theme.js';
-import { todayISO, fmtDate, fmtTime, isHabitDueOn, weekISO } from '../lib/helpers.js';
+import { C, card, monoMicro, sectionTitle, dot, inp } from '../lib/theme.js';
+import { todayISO, fmtTime, isHabitDueOn, weekISO } from '../lib/helpers.js';
 import { Chip, Section, Empty } from '../components/ui.jsx';
 import { SwipeRow } from '../components/SwipeRow.jsx';
 import { RowMenu } from '../components/RowMenu.jsx';
@@ -32,9 +32,6 @@ export function Home({
     e => e.startDatetime.startsWith(today) && matches(e.name)
   );
 
-  const totalToday = dueToday.length;
-  const doneToday = dueToday.filter(t => t.done).length;
-
   const submitQuick = () => {
     const name = quick.trim();
     if (!name) return;
@@ -43,21 +40,13 @@ export function Home({
   };
 
   return (
-    <div style={screenPad}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-        <div>
-          <div style={sectionTitle}>Today</div>
-          <div style={{ ...screenTitle, marginTop: 4 }}>{fmtDate(today)}</div>
-        </div>
-        <div style={monoMicro}>{doneToday}/{totalToday} done</div>
-      </div>
-
+    <div style={{ padding: '8px 20px 8px' }}>
       {/* Search */}
       <input
         value={search}
         onChange={e => setSearch(e.target.value)}
         placeholder="Search tasks, events…"
-        style={{ ...inp, marginTop: 14, fontSize: 13 }}
+        style={{ ...inp, fontSize: 13 }}
       />
 
       {/* Space filter chips */}

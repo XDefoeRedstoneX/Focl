@@ -4,6 +4,7 @@ import {
   setWeekStart, weekISO, weekDaysFrom, newId,
   nextOccurrence, isHabitDueOn, computeStreak,
   habitWeeklyTarget, CAP_WEEKDAY,
+  greeting, dateKicker, eventOccursOn, agendaForDay,
 } from './helpers.js';
 
 // 2026-06-10 is a Wednesday — fixed reference point for everything below.
@@ -220,5 +221,85 @@ describe('CAP_WEEKDAY', () => {
     expect(CAP_WEEKDAY.Sun).toBe(1);
     expect(CAP_WEEKDAY.Mon).toBe(2);
     expect(CAP_WEEKDAY.Sat).toBe(7);
+  });
+});
+
+describe('greeting', () => {
+  it('changes with the time of day', () => {
+    expect(greeting(new Date('2026-06-10T08:00:00'))).toBe('Good morning');
+    expect(greeting(new Date('2026-06-10T13:00:00'))).toBe('Good afternoon');
+    expect(greeting(new Date('2026-06-10T20:00:00'))).toBe('Good evening');
+  });
+});
+
+describe('dateKicker', () => {
+  it('formats weekday and month/day', () => {
+    expect(dateKicker('2026-06-10')).toBe('Wednesday · June 10');
+  });
+});
+
+describe('eventOccursOn', () => {
+  const ev = (over = {}) => ({
+    startDatetime: '2026-06-10T09:00', endDatetime: '2026-06-10T10:00',
+    recurrence: 'none', customDays: [], ...over,
+  });
+  it('one-off events occur only on their start date', () => {
+    expect(eventOccursOn(ev(), '2026-06-10')).toBe(true);
+    expect(eventOccursOn(ev(), '2026-06-11')).toBe(false);
+  });
+  it('never occurs before the start date', () => {
+    expect(eventOccursOn(ev({ recurrence: 'daily' }), '2026-06-09')).toBe(false);
+  });
+  it('daily occurs every day from start', () => {
+    expect(eventOccursOn(ev({ recurrence: 'daily' }), '2026-06-20')).toBe(true);
+  });
+  it('weekdays skips weekends', () => {
+    expect(eventOccursOn(ev({ recurrence: 'weekdays' }), '2026-06-12')).toBe(true);  // Fri
+    expect(eventOccursOn(ev({ recurrence: 'weekdays' }), '2026-06-13')).toBe(false); // Sat
+  });
+  it('weekly matches the start weekday', () => {
+    expect(eventOccursOn(ev({ recurrence: 'weekly' }), '2026-06-17')).toBe(true);  // +1wk Wed
+    expect(eventOccursOn(ev({ recurrence: 'weekly' }), '2026-06-18')).toBe(false);
+  });
+  it('biweekly matches every other week', () => {
+    expect(eventOccursOn(ev({ recurrence: 'biweekly' }), '2026-06-17')).toBe(false); // +1wk
+    expect(eventOccursOn(ev({ recurrence: 'biweekly' }), '2026-06-24')).toBe(true);  // +2wk
+  });
+  it('monthly matches the day of month', () => {
+    expect(eventOccursOn(ev({ recurrence: 'monthly' }), '2026-07-10')).toBe(true);
+    expect(eventOccursOn(ev({ recurrence: 'monthly' }), '2026-07-11')).toBe(false);
+  });
+  it('custom matches selected weekday keys', () => {
+    const e = ev({ recurrence: 'custom', customDays: ['Mon', 'Fri'] });
+    expect(eventOccursOn(e, '2026-06-12')).toBe(true);  // Fri
+    expect(eventOccursOn(e, '2026-06-11')).toBe(false); // Thu
+  });
+});
+
+describe('agendaForDay', () => {
+  const events = [
+    { id: 'e1', name: 'Standup', spaceId: '', recurrence: 'none', customDays: [], startDatetime: '2026-06-10T09:30', endDatetime: '2026-06-10T09:45' },
+    { id: 'e2', name: 'Lunch', spaceId: '', recurrence: 'none', customDays: [], startDatetime: '2026-06-10T12:00', endDatetime: '2026-06-10T13:00' },
+  ];
+  const tasks = [
+    { id: 't1', name: 'Pay rent', deadline: '2026-06-10' },
+    { id: 't2', name: 'Other day', deadline: '2026-06-11' },
+  ];
+
+  it('merges events and tasks for the day, timed first then untimed', () => {
+    const agenda = agendaForDay(tasks, events, '2026-06-10');
+    expect(agenda.map(a => a.item.id)).toEqual(['e1', 'e2', 't1']);
+    expect(agenda[0].kind).toBe('event');
+    expect(agenda[2].kind).toBe('task');
+    expect(agenda[2].time).toBe(null);
+  });
+
+  it('excludes items from other days', () => {
+    const agenda = agendaForDay(tasks, events, '2026-06-11');
+    expect(agenda.map(a => a.item.id)).toEqual(['t2']);
+  });
+
+  it('is empty for a quiet day', () => {
+    expect(agendaForDay(tasks, events, '2026-06-15')).toEqual([]);
   });
 });

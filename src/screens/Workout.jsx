@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { C, card, screenTitle, screenPad, sectionLabel, dot, monoMicro, inp, SWATCHES } from '../lib/theme.js';
+import { C, card, sectionLabel, dot, monoMicro, inp, SWATCHES } from '../lib/theme.js';
 import { todayISO, getDayKey, weekDaysFrom, newId } from '../lib/helpers.js';
 import { Chip, Empty, Confirm } from '../components/ui.jsx';
 import { RowMenu } from '../components/RowMenu.jsx';
@@ -14,22 +14,21 @@ export function Workout({ kits, plan, sessions, habits, saveKit, deleteKit, upda
   const [tab, setTab] = useState('today');
 
   return (
-    <div style={screenPad}>
-      <div style={screenTitle}>Workout</div>
-      <div style={{ display: 'flex', gap: 18, marginTop: 14, borderBottom: `0.5px solid ${C.border}` }}>
-        {['today', 'plan', 'kits'].map(t => (
+    <div style={{ padding: '8px 20px 8px' }}>
+      <div style={{ display: 'flex', gap: 18, borderBottom: `0.5px solid ${C.border}` }}>
+        {[['today', 'Today'], ['plan', 'Split'], ['kits', 'Kits']].map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)} style={{
             background: 'none', border: 'none', padding: '0 0 10px',
             fontSize: 14, fontWeight: 500,
             color: tab === t ? C.t1 : C.t3,
             borderBottom: tab === t ? `2px solid ${C.amber}` : '2px solid transparent',
-            textTransform: 'capitalize', cursor: 'pointer',
-          }}>{t}</button>
+            cursor: 'pointer',
+          }}>{label}</button>
         ))}
       </div>
 
       {tab === 'today' && <Today kits={kits} plan={plan} sessions={sessions} upsertSession={upsertSession} />}
-      {tab === 'plan' && <Plan kits={kits} plan={plan} habits={habits} updatePlan={updatePlan} />}
+      {tab === 'plan' && <Split kits={kits} plan={plan} habits={habits} updatePlan={updatePlan} />}
       {tab === 'kits' && <Kits kits={kits} saveKit={saveKit} deleteKit={deleteKit} />}
     </div>
   );
@@ -173,9 +172,9 @@ function Today({ kits, plan, sessions, upsertSession }) {
   );
 }
 
-// ---------- Plan ----------
+// ---------- Split (weekly plan) ----------
 
-function Plan({ kits, plan, habits, updatePlan }) {
+function Split({ kits, plan, habits, updatePlan }) {
   const order = weekDaysFrom();
   return (
     <div style={{ marginTop: 16 }}>

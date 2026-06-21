@@ -1,5 +1,5 @@
 import React from 'react';
-import { C, card, sectionTitle, screenTitle, dot, screenPad } from '../lib/theme.js';
+import { C, card, sectionTitle, dot } from '../lib/theme.js';
 import { todayISO, weekISO, weekDaysFrom, isHabitDueOn } from '../lib/helpers.js';
 import { Stat, Empty } from '../components/ui.jsx';
 import { SwipeRow } from '../components/SwipeRow.jsx';
@@ -20,12 +20,7 @@ export function Habits({ habits, spaces, toggleHabitDay, openEdit, deleteHabit }
   const lifetimeDone = habits.reduce((s, h) => s + h.completions.length, 0);
 
   return (
-    <div style={screenPad}>
-      <div style={screenTitle}>Habits</div>
-      <div style={{ fontSize: 12, color: C.t2, marginTop: 4, marginBottom: 20 }}>
-        Daily rituals, weekly view
-      </div>
-
+    <div style={{ padding: '8px 20px 8px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 20 }}>
         <Stat label="Best streak" value={bestStreak} suffix="d" />
         <Stat label="This week" value={weekPct} suffix="%" />

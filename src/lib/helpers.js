@@ -137,6 +137,69 @@ export const countEventsInWeek = (events, week) => events.filter(e => {
   return false;
 }).length;
 
+// Time-of-day greeting for the Today header title.
+export const greeting = (now = new Date()) => {
+  const h = now.getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+};
+
+// "Tuesday · June 24" style kicker for the Today header.
+export const dateKicker = (dateISO) => {
+  const d = dateISO ? new Date(dateISO + 'T00:00:00') : new Date();
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+  const md = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+  return `${weekday} · ${md}`;
+};
+
+// Does a (possibly recurring) event occur on dateISO? Occurrences never
+// precede the event's own start date.
+export const eventOccursOn = (event, dateISO) => {
+  const startISO = event.startDatetime.slice(0, 10);
+  if (dateISO < startISO) return false;
+  const rec = event.recurrence || 'none';
+  if (rec === 'none') return dateISO === startISO;
+  if (rec === 'daily') return true;
+
+  const start = new Date(startISO + 'T00:00:00');
+  const day = new Date(dateISO + 'T00:00:00');
+  const dKey = getDayKey(day);
+
+  if (rec === 'weekdays') return !['Sat', 'Sun'].includes(dKey);
+  if (rec === 'custom') return (event.customDays || []).includes(dKey);
+  if (rec === 'weekly') return dKey === getDayKey(start);
+  if (rec === 'biweekly') {
+    if (dKey !== getDayKey(start)) return false;
+    const weeks = Math.round((day - start) / (7 * 86400000));
+    return weeks % 2 === 0;
+  }
+  if (rec === 'monthly') return day.getDate() === start.getDate();
+  return false;
+};
+
+// Merge events (by occurrence) and tasks (by deadline) into a single
+// agenda for one day, sorted by time. Untimed tasks sort after timed
+// items. Returns [{ kind, item, time }] where time is 'HH:MM' or null.
+export const agendaForDay = (tasks, events, dateISO) => {
+  const entries = [];
+  for (const e of events) {
+    if (eventOccursOn(e, dateISO)) {
+      entries.push({ kind: 'event', item: e, time: e.startDatetime.slice(11, 16) || null });
+    }
+  }
+  for (const t of tasks) {
+    if (t.deadline === dateISO) entries.push({ kind: 'task', item: t, time: null });
+  }
+  // Timed items first (chronological), then untimed tasks.
+  return entries.sort((a, b) => {
+    if (a.time && b.time) return a.time.localeCompare(b.time);
+    if (a.time) return -1;
+    if (b.time) return 1;
+    return 0;
+  });
+};
+
 // Whether a habit is "due" today, based on frequency / customDays
 export const isHabitDueOn = (habit, dateISO) => {
   const dKey = getDayKey(new Date(dateISO + 'T00:00:00'));
