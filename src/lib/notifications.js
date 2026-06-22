@@ -3,6 +3,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { CAP_WEEKDAY } from './helpers.js';
 
 const isNative = () => Capacitor.isNativePlatform();
 
@@ -65,8 +66,8 @@ export function buildFireDate(timing, time, referenceISO) {
   return new Date(ref.getTime() + (offsets[timing] || 0));
 }
 
-// Capacitor weekday numbers are Sunday-first 1–7
-const WEEKDAY_NUM = { Sun: 1, Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6, Sat: 7 };
+// Capacitor weekday numbers (Sunday-first 1–7) for the Mon–Fri set
+const WEEKDAYS_CAP = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(d => CAP_WEEKDAY[d]);
 
 // Map one reminder of an item to plugin schedule(s). Repeating rules use
 // date-match schedules so they keep firing even when the app isn't
@@ -84,16 +85,27 @@ function schedulesFor(item, kind, n, now) {
     return [{ on: { hour, minute } }];
   }
   if (recurrence === 'weekdays') {
-    return [2, 3, 4, 5, 6].map(weekday => ({ on: { weekday, hour, minute } }));
+    return WEEKDAYS_CAP.map(weekday => ({ on: { weekday, hour, minute } }));
   }
   if (recurrence === 'custom') {
-    return (item.customDays || []).map(d => ({ on: { weekday: WEEKDAY_NUM[d], hour, minute } }));
+    return (item.customDays || []).map(d => ({ on: { weekday: CAP_WEEKDAY[d], hour, minute } }));
   }
   if (recurrence === 'weekly') {
     return [{ on: { weekday: fire.getDay() + 1, hour, minute } }];
   }
   if (recurrence === 'monthly') {
-    return [{ on: { day: fire.getDate(), hour, minute } }];
+    const day = fire.getDate();
+    // A date-match on day 29–31 silently skips months that lack that day
+    // (Feb, Apr, …). Fall back to a one-shot of the next occurrence, like
+    // biweekly, so it always fires (re-armed by the startup resync).
+    if (day <= 28) return [{ on: { day, hour, minute } }];
+    let at = fire.getTime();
+    while (at < now) {
+      const d = new Date(at);
+      d.setMonth(d.getMonth() + 1);
+      at = d.getTime();
+    }
+    return [{ at: new Date(at), allowWhileIdle: true }];
   }
   if (recurrence === 'biweekly') {
     // No two-week date-match exists: arm the next future occurrence as a
@@ -109,14 +121,26 @@ function schedulesFor(item, kind, n, now) {
 
 // Pure: the exact notification objects handed to the plugin for an item.
 export function buildNotificationSpecs(item, kind, now = Date.now()) {
+  // A completed one-off task has nothing left to remind about, so it must
+  // not be (re-)armed — including by the startup resync. Recurring tasks
+  // keep their repeating schedule: today's `done` is transient and future
+  // occurrences still need the reminder.
+  if (kind === 'task' && item.done && (!item.recurrence || item.recurrence === 'none')) {
+    return [];
+  }
   const specs = [];
   for (const n of item.notifications || []) {
     for (const schedule of schedulesFor(item, kind, n, now)) {
+      if (specs.length >= MAX_NOTIFS_PER_ITEM) break; // keep ids within cancel range
       specs.push({
         id: intId(`${item.id}:${specs.length}`),
         title: item.name,
         body: item.notes || (kind === 'task' ? 'Task reminder' : 'Event reminder'),
         channelId: CHANNEL_ID,
+        // Tasks stay in the shade until completed (completing cancels them);
+        // events are informational and dismissable as usual.
+        ongoing: kind === 'task',
+        autoCancel: kind !== 'task',
         schedule,
       });
     }
@@ -124,8 +148,10 @@ export function buildNotificationSpecs(item, kind, now = Date.now()) {
   return specs;
 }
 
-// Weekday-based rules expand to at most 7 notifications per item.
-export const MAX_NOTIFS_PER_ITEM = 8;
+// Upper bound on scheduled notifications per item. buildNotificationSpecs
+// caps at this; cancelItem clears this many ids. Generous so multi-reminder
+// imported items (e.g. several custom-day rules) can't leave orphans.
+export const MAX_NOTIFS_PER_ITEM = 32;
 
 export async function scheduleItem(item, kind) {
   if (!isNative()) return;

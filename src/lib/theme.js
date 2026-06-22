@@ -25,14 +25,22 @@ export const C = {
   t3: '#566A6F',        // tertiary / muted
 };
 
+// A spread across the hue wheel rather than shades of the cyan brand
+// accent, so spaces/habits/kits are easy to tell apart at a glance.
+// All muted enough to sit on the dark slate background.
 export const SWATCHES = [
-  C.amber, C.green, C.blue, C.red, C.purple, C.pink,
-  '#3E97A6', // deep teal
-  C.bookmark, // gold
-  '#E0853F', // orange
+  C.amber,   // cyan (primary)
+  C.green,   // teal-green
+  C.blue,    // cyan-blue
+  '#7C82E8', // indigo
+  '#A878D8', // violet
+  '#D86FB0', // magenta
+  '#E2574C', // coral red
+  C.red,     // orange
+  '#E0A33F', // amber-gold
+  C.bookmark, // yellow
+  '#7FB861', // lime green
   '#6FA2B5', // steel
-  '#9ED9DC', // ice
-  '#3C7E88', // pine teal
 ];
 
 // Translucent fill of the primary accent (for active chips, etc.)
