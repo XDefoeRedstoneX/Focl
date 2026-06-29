@@ -20,4 +20,10 @@ export const DEFAULTS = {
   sessions: [],
   settings: null, // App fills with DEFAULT_SETTINGS
   archive: [],    // Past weekly snapshots
+
+  // Day Planner + Class Schedule (see docs/day-planner-design.md)
+  classes: [],         // recurring weekly timetable
+  dayPlans: [],        // per-date timeboxed plans, keyed by `date`
+  blockTemplates: [],  // reusable single blocks
+  dayTemplates: [],    // named full-day layouts
 };

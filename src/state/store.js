@@ -16,11 +16,15 @@ export const DEFAULT_SETTINGS = {
   lastArchivedWeek: null, // YYYY-MM-DD of the week-start of the last archived week
   lastCleanupDate: null,  // YYYY-MM-DD when cleanup last ran
   lastRollDate: null,     // YYYY-MM-DD when recurring tasks last rolled forward
+  // Day Planner: the nightly window in which tomorrow can be built.
+  dayPlannerEnabled: true,
+  planningWindow: { start: '20:00', end: '24:00' },
 };
 
 export const PERSISTED_KEYS = [
   'spaces', 'tasks', 'events', 'habits', 'settings',
   'archive', 'kits', 'plan', 'sessions',
+  'classes', 'dayPlans', 'blockTemplates', 'dayTemplates',
 ];
 
 export const initialState = {
@@ -58,6 +62,34 @@ const upsertById = (list, item) =>
   list.some(x => x.id === item.id)
     ? list.map(x => x.id === item.id ? item : x)
     : [...list, item];
+
+// --- Day Planner block ops ---
+// A day plan is keyed by `date` (not `id`) and holds a timeboxed `blocks`
+// array. Block mutations funnel through one pure op so the normal path and
+// the emergency-edit path (which also logs an audit entry) stay in sync.
+const emptyDayPlan = (date) => ({
+  date, status: 'draft', committedAt: null, blocks: [], emergencyEdits: [],
+});
+
+const applyBlockOp = (plan, op) => {
+  if (op.kind === 'add') return { ...plan, blocks: [...plan.blocks, op.block] };
+  if (op.kind === 'update') {
+    return { ...plan, blocks: plan.blocks.map(b => b.id === op.id ? { ...b, ...op.patch } : b) };
+  }
+  if (op.kind === 'remove') return { ...plan, blocks: plan.blocks.filter(b => b.id !== op.id) };
+  return plan;
+};
+
+// Apply `fn` to the plan for `date`, creating an empty draft first unless
+// createIfAbsent is false (you can't commit/toggle a plan that doesn't exist).
+const mapDayPlan = (state, date, fn, createIfAbsent = true) => {
+  const plans = state.dayPlans || [];
+  if (plans.some(p => p.date === date)) {
+    return { ...state, dayPlans: plans.map(p => p.date === date ? fn(p) : p) };
+  }
+  if (!createIfAbsent) return state;
+  return { ...state, dayPlans: [...plans, fn(emptyDayPlan(date))] };
+};
 
 export function reducer(state, action) {
   switch (action.type) {
@@ -134,6 +166,61 @@ export function reducer(state, action) {
       return { ...state, sessions, habits };
     }
 
+    // --- Class schedule ---
+    case 'class/save':
+      return { ...state, classes: upsertById(state.classes, action.class) };
+    case 'class/delete':
+      return { ...state, classes: state.classes.filter(c => c.id !== action.id) };
+
+    // --- Block & day templates ---
+    case 'blockTemplate/save':
+      return { ...state, blockTemplates: upsertById(state.blockTemplates, action.template) };
+    case 'blockTemplate/delete':
+      return { ...state, blockTemplates: state.blockTemplates.filter(t => t.id !== action.id) };
+    case 'dayTemplate/save':
+      return { ...state, dayTemplates: upsertById(state.dayTemplates, action.template) };
+    case 'dayTemplate/delete':
+      return { ...state, dayTemplates: state.dayTemplates.filter(t => t.id !== action.id) };
+
+    // --- Day plans ---
+    // `seed` replaces a draft's blocks wholesale (template apply + class merge
+    // is composed by the caller, which owns id generation). The day-boundary
+    // lock lives in runDailyMaintenance; once locked, edits should route
+    // through `dayplan/emergencyEdit` so they're recorded.
+    case 'dayplan/seed':
+      return mapDayPlan(state, action.date, p => ({ ...p, blocks: action.blocks }));
+    case 'dayplan/addBlock':
+      return mapDayPlan(state, action.date, p => applyBlockOp(p, { kind: 'add', block: action.block }));
+    case 'dayplan/updateBlock':
+      return mapDayPlan(state, action.date, p => applyBlockOp(p, { kind: 'update', id: action.id, patch: action.patch }));
+    case 'dayplan/removeBlock':
+      return mapDayPlan(state, action.date, p => applyBlockOp(p, { kind: 'remove', id: action.id }));
+    case 'dayplan/toggleBlockDone':
+      // Checking blocks off is allowed any time (that's the point of the day);
+      // doneAt feeds the on-time adherence stat.
+      return mapDayPlan(state, action.date, p => ({
+        ...p,
+        blocks: p.blocks.map(b => b.id === action.id
+          ? { ...b, done: !b.done, doneAt: !b.done ? (action.at || null) : null }
+          : b),
+      }), false);
+    case 'dayplan/commit':
+      return mapDayPlan(state, action.date,
+        p => ({ ...p, status: 'locked', committedAt: action.at || null }), false);
+    case 'dayplan/emergencyEdit':
+      // A logged mutation against a locked plan: apply the op AND append to
+      // the audit trail that feeds the plan-discipline stat.
+      return mapDayPlan(state, action.date, p => {
+        const next = applyBlockOp(p, action.op);
+        const entry = {
+          at: action.at || null,
+          action: action.op.kind,
+          blockId: action.op.id || action.op.block?.id || null,
+          note: action.note || '',
+        };
+        return { ...next, emergencyEdits: [...p.emergencyEdits, entry] };
+      }, false);
+
     case 'import':
       return { ...state, ...action.payload };
 
@@ -155,10 +242,18 @@ export function sanitizeImport(raw) {
   const src = raw.data && typeof raw.data === 'object' ? raw.data : raw;
 
   const out = {};
-  for (const key of ['spaces', 'tasks', 'events', 'habits', 'kits', 'sessions']) {
+  const idArrays = [
+    'spaces', 'tasks', 'events', 'habits', 'kits', 'sessions',
+    'classes', 'blockTemplates', 'dayTemplates',
+  ];
+  for (const key of idArrays) {
     if (Array.isArray(src[key])) {
       out[key] = src[key].filter(x => x && typeof x === 'object' && x.id != null);
     }
+  }
+  // Day plans are keyed by `date`, not `id`.
+  if (Array.isArray(src.dayPlans)) {
+    out.dayPlans = src.dayPlans.filter(x => x && typeof x === 'object' && typeof x.date === 'string');
   }
   if (src.plan && typeof src.plan === 'object' && !Array.isArray(src.plan)) {
     out.plan = src.plan;

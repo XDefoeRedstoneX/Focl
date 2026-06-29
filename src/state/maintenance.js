@@ -12,6 +12,7 @@ import {
 
 export function runDailyMaintenance(state, today = todayISO()) {
   let { tasks, events, settings, archive } = state;
+  let dayPlans = state.dayPlans || [];
   const rolledTasks = [];
 
   // 1. Roll recurring tasks forward. Runs at the day boundary so a task
@@ -47,8 +48,18 @@ export function runDailyMaintenance(state, today = todayISO()) {
     events = events.filter(e =>
       !(e.recurrence === 'none' && e.startDatetime.slice(0, 10) < cutoffISO)
     );
+    dayPlans = dayPlans.filter(p => p.date >= cutoffISO);
 
     settings = { ...settings, lastCleanupDate: today };
+  }
+
+  // Auto-lock day plans whose day has arrived or passed: a plan you built the
+  // night before becomes read-only (emergency-edit-only) once its day starts.
+  // Runs every startup (not gated on a date stamp) so locking is never missed.
+  if (dayPlans.some(p => p.status === 'draft' && p.date <= today)) {
+    dayPlans = dayPlans.map(p =>
+      p.status === 'draft' && p.date <= today ? { ...p, status: 'locked' } : p
+    );
   }
 
   // 3. Weekly archive: snapshot the previous week once the week rolls over.
@@ -66,7 +77,7 @@ export function runDailyMaintenance(state, today = todayISO()) {
   }
 
   return {
-    state: { ...state, tasks, events, settings, archive },
+    state: { ...state, tasks, events, settings, archive, dayPlans },
     rolledTasks,
   };
 }

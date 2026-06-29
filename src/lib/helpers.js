@@ -200,6 +200,90 @@ export const agendaForDay = (tasks, events, dateISO) => {
   });
 };
 
+// --- Day Planner: planning window, class schedule, adherence ---
+
+// 'HH:MM' → minutes since local midnight. '24:00' → 1440 (end-of-day).
+export const hmToMin = (hm) => {
+  const [h, m] = hm.split(':').map(Number);
+  return h * 60 + (m || 0);
+};
+
+// Is `now` (a Date) inside the nightly planning window? The window is
+// { start, end } as 'HH:MM' local times. Windows may end at '24:00' and may
+// wrap past midnight (start > end), e.g. { start:'22:00', end:'02:00' }.
+export const isPlanningWindow = (now, window) => {
+  if (!window) return false;
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const start = hmToMin(window.start);
+  const end = hmToMin(window.end);
+  return start < end
+    ? cur >= start && cur < end
+    : cur >= start || cur < end; // wrapping window
+};
+
+// The date the planner is currently building: tomorrow, while in the window;
+// null otherwise. Intended for windows that end at/before midnight (the default
+// 20:00–24:00) — the evening you plan precedes the day you're planning.
+export const plannableDate = (now, window) =>
+  isPlanningWindow(now, window) ? addDays(1, localISO(now)) : null;
+
+// What a user may do with the plan for `dateISO` right now:
+//   'edit'     — it's tomorrow and we're inside the planning window
+//   'locked'   — its day has begun or passed (execute; emergency-edit only)
+//   'readonly' — a future date not yet in its window
+export const planEditMode = (dateISO, now, window) => {
+  if (dateISO <= localISO(now)) return 'locked';
+  if (dateISO === plannableDate(now, window)) return 'edit';
+  return 'readonly';
+};
+
+// Even/odd parity of a date's week, measured from a fixed Monday epoch, for
+// biweekly ('odd'/'even') class timetables. Stable and timezone-agnostic.
+const EPOCH_MONDAY = Date.UTC(1970, 0, 5); // 1970-01-05 is a Monday
+const weekParity = (dateISO) => {
+  const d = new Date(dateISO + 'T00:00:00');
+  const offset = (d.getDay() + 6) % 7;       // days since Monday
+  const mondayUTC = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() - offset);
+  const weeks = Math.round((mondayUTC - EPOCH_MONDAY) / (7 * 86400000));
+  return weeks % 2 === 0 ? 'even' : 'odd';
+};
+
+// Does a class meet on dateISO? Classes recur weekly (no start date), honoring
+// their weekday set, `active` flag, and `weeks` ('all' | 'odd' | 'even').
+export const classOccursOn = (cls, dateISO) => {
+  if (cls.active === false) return false;
+  const dKey = getDayKey(new Date(dateISO + 'T00:00:00'));
+  if (!(cls.days || []).includes(dKey)) return false;
+  const weeks = cls.weeks || 'all';
+  return weeks === 'all' ? true : weekParity(dateISO) === weeks;
+};
+
+// Adherence stats for one day plan. on-time = a done block whose completion
+// (doneAt) landed no later than its end time plus a grace window. Blocks
+// completed without a recorded doneAt don't count toward on-time.
+export const planAdherence = (dayPlan, graceMin = 30) => {
+  const blocks = dayPlan?.blocks || [];
+  const planned = blocks.length;
+  const done = blocks.filter(b => b.done).length;
+  let onTime = 0;
+  if (dayPlan?.date) {
+    const dayStart = new Date(dayPlan.date + 'T00:00:00').getTime();
+    for (const b of blocks) {
+      if (!b.done || !b.doneAt) continue;
+      const deadline = dayStart + (hmToMin(b.end) + graceMin) * 60000;
+      if (new Date(b.doneAt).getTime() <= deadline) onTime++;
+    }
+  }
+  return {
+    planned,
+    done,
+    adherence: planned ? Math.round((done / planned) * 100) : 0,
+    onTime,
+    onTimePct: done ? Math.round((onTime / done) * 100) : 0,
+    emergencyEdits: (dayPlan?.emergencyEdits || []).length,
+  };
+};
+
 // Whether a habit is "due" today, based on frequency / customDays
 export const isHabitDueOn = (habit, dateISO) => {
   const dKey = getDayKey(new Date(dateISO + 'T00:00:00'));
