@@ -25,6 +25,18 @@ const task = (over = {}) => ({
   ...over,
 });
 
+describe('buildWeekSnapshot — plan adherence', () => {
+  it('includes a plan field aggregating that week\'s day plans', () => {
+    const weekStart = '2026-06-08'; // Monday
+    const dayPlans = [{
+      date: '2026-06-08', emergencyEdits: [{ at: 'x', action: 'move' }],
+      blocks: [{ id: 'a', end: '09:00', done: true }, { id: 'b', end: '10:00', done: false }],
+    }];
+    const snap = buildWeekSnapshot(weekStart, { tasks: [], events: [], habits: [], spaces: [], dayPlans });
+    expect(snap.plan).toMatchObject({ daysPlanned: 1, blocksPlanned: 2, blocksDone: 1, adherencePct: 50, emergencyEdits: 1 });
+  });
+});
+
 describe('roll-forward of recurring tasks', () => {
   it('advances an overdue daily task to today and unchecks it', () => {
     const s0 = state({ tasks: [task({ deadline: '2026-06-08', recurrence: 'daily', done: true })] });

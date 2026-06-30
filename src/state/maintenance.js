@@ -7,7 +7,7 @@
 
 import {
   todayISO, addDays, weekISO, weekDaysFrom,
-  nextOccurrence, countEventsInWeek, habitWeeklyTarget,
+  nextOccurrence, countEventsInWeek, habitWeeklyTarget, weekPlanAdherence,
 } from '../lib/helpers.js';
 
 export function runDailyMaintenance(state, today = todayISO()) {
@@ -83,7 +83,7 @@ export function runDailyMaintenance(state, today = todayISO()) {
 }
 
 // Build a stats snapshot of a past week for the archive
-export function buildWeekSnapshot(weekStart, { tasks, events, habits, spaces }) {
+export function buildWeekSnapshot(weekStart, { tasks, events, habits, spaces, dayPlans = [] }) {
   const week = Array.from({ length: 7 }, (_, i) => addDays(i, weekStart));
 
   const tasksDueThisWeek = tasks.filter(t => week.includes(t.deadline));
@@ -112,6 +112,7 @@ export function buildWeekSnapshot(weekStart, { tasks, events, habits, spaces }) 
     habitsCompleted: habitDone,
     habitSlots, habitPct,
     eventsCount: countEventsInWeek(events, week),
+    plan: weekPlanAdherence(dayPlans, week),
     byDay: week.map((d, i) => {
       const tDone = tasks.filter(t => t.done && t.deadline === d).length;
       const hDone = habits.filter(h => h.completions.includes(d)).length;

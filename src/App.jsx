@@ -374,6 +374,13 @@ export default function App() {
     updateBlock: (date, id, patch) => dispatch({ type: 'dayplan/updateBlock', date, id, patch }),
     removeBlock: (date, id) => dispatch({ type: 'dayplan/removeBlock', date, id }),
     seedDay: (date, blocks) => dispatch({ type: 'dayplan/seed', date, blocks }),
+    toggleBlock: (date, id) => {
+      tapLight();
+      dispatch({ type: 'dayplan/toggleBlockDone', date, id, at: new Date().toISOString() });
+    },
+    // A logged mutation against a locked plan (counts toward the discipline stat).
+    emergencyEdit: (date, op, note) =>
+      dispatch({ type: 'dayplan/emergencyEdit', date, op, at: new Date().toISOString(), note }),
     commitDay: (date) => {
       tapMedium();
       dispatch({ type: 'dayplan/commit', date, at: new Date().toISOString() });
@@ -384,6 +391,7 @@ export default function App() {
   };
 
   const planTomorrow = () => { setPlanTab('tomorrow'); setScreen('plan'); };
+  const openTodayPlan = () => { setPlanTab('today'); setScreen('plan'); };
 
   // === Workout handlers ===
 
@@ -475,6 +483,8 @@ export default function App() {
                 deleteTask={deleteTask} openEdit={openEdit}
                 quickAddTask={quickAddTask} setScreen={setScreen}
                 onPlanTomorrow={planTomorrow}
+                dayPlans={state.dayPlans} onOpenTodayPlan={openTodayPlan}
+                toggleBlock={planner.toggleBlock}
               />
             )}
             {screen === 'plan' && (
@@ -528,7 +538,7 @@ export default function App() {
               <Analytics
                 tasks={tasks} events={events}
                 habits={habits} spaces={spaces}
-                archive={archive}
+                archive={archive} dayPlans={state.dayPlans}
               />
             )}
             {screen === 'settings' && (

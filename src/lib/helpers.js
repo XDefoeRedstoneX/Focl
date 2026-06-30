@@ -311,6 +311,27 @@ export const planAdherence = (dayPlan, graceMin = 30) => {
   };
 };
 
+// Aggregate plan adherence across a week (7 ISO dates). Only days that have a
+// plan with blocks count toward `daysPlanned`.
+export const weekPlanAdherence = (dayPlans, week, graceMin = 30) => {
+  let daysPlanned = 0, blocksPlanned = 0, blocksDone = 0, onTime = 0, emergencyEdits = 0;
+  for (const date of week) {
+    const plan = (dayPlans || []).find(p => p.date === date);
+    if (!plan || !(plan.blocks || []).length) continue;
+    daysPlanned++;
+    const a = planAdherence(plan, graceMin);
+    blocksPlanned += a.planned;
+    blocksDone += a.done;
+    onTime += a.onTime;
+    emergencyEdits += a.emergencyEdits;
+  }
+  return {
+    daysPlanned, blocksPlanned, blocksDone, onTime, emergencyEdits,
+    adherencePct: blocksPlanned ? Math.round((blocksDone / blocksPlanned) * 100) : 0,
+    onTimePct: blocksDone ? Math.round((onTime / blocksDone) * 100) : 0,
+  };
+};
+
 // Whether a habit is "due" today, based on frequency / customDays
 export const isHabitDueOn = (habit, dateISO) => {
   const dKey = getDayKey(new Date(dateISO + 'T00:00:00'));

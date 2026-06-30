@@ -4,7 +4,7 @@ import { runDailyMaintenance } from './maintenance.js';
 import {
   hmToMin, minToHM, snapMin, blocksOverlap, minutesUntilWindow,
   isPlanningWindow, plannableDate, planEditMode,
-  classOccursOn, planAdherence,
+  classOccursOn, planAdherence, weekPlanAdherence,
 } from '../lib/helpers.js';
 
 const base = (over = {}) => ({ ...initialState, ...over });
@@ -131,6 +131,32 @@ describe('planAdherence', () => {
   it('handles an empty plan without dividing by zero', () => {
     const a = planAdherence({ date: '2026-06-29', blocks: [] });
     expect(a).toMatchObject({ planned: 0, done: 0, adherence: 0, onTime: 0, onTimePct: 0 });
+  });
+});
+
+describe('weekPlanAdherence', () => {
+  const week = ['2026-06-29', '2026-06-30', '2026-07-01', '2026-07-02', '2026-07-03', '2026-07-04', '2026-07-05'];
+
+  it('aggregates planned/done/on-time/emergency across the week', () => {
+    const dayPlans = [
+      { date: '2026-06-29', emergencyEdits: [{ at: 'x', action: 'move' }], blocks: [
+        { id: 'a', end: '09:00', done: true, doneAt: '2026-06-29T08:50:00' },
+        { id: 'b', end: '10:00', done: false },
+      ] },
+      { date: '2026-07-01', emergencyEdits: [], blocks: [
+        { id: 'c', end: '12:00', done: true, doneAt: '2026-07-01T11:00:00' },
+      ] },
+      { date: '2026-07-20', blocks: [{ id: 'z', end: '09:00', done: true }] }, // outside the week — ignored
+    ];
+    const r = weekPlanAdherence(dayPlans, week);
+    expect(r).toMatchObject({
+      daysPlanned: 2, blocksPlanned: 3, blocksDone: 2,
+      adherencePct: 67, onTime: 2, onTimePct: 100, emergencyEdits: 1,
+    });
+  });
+
+  it('is all-zero when nothing is planned', () => {
+    expect(weekPlanAdherence([], week)).toMatchObject({ daysPlanned: 0, blocksPlanned: 0, adherencePct: 0, onTimePct: 0 });
   });
 });
 

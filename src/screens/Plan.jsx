@@ -46,16 +46,21 @@ export function Plan({
         </div>
       )}
 
-      {plannerEnabled && tab === 'tomorrow' ? (
-        <DayPlanner
-          date={tomorrow}
-          mode={planEditMode(tomorrow, new Date(), win)}
-          window={win}
-          dayPlan={dayPlans.find(p => p.date === tomorrow)}
-          classes={classes} tasks={tasks} spaces={spaces}
-          blockTemplates={blockTemplates} dayTemplates={dayTemplates}
-          planner={planner}
-        />
+      {plannerEnabled && (tab === 'tomorrow' || tab === 'today') ? (
+        (() => {
+          const d = tab === 'today' ? today : tomorrow;
+          return (
+            <DayPlanner
+              date={d}
+              mode={planEditMode(d, new Date(), win)}
+              window={win}
+              dayPlan={dayPlans.find(p => p.date === d)}
+              classes={classes} tasks={tasks} spaces={spaces}
+              blockTemplates={blockTemplates} dayTemplates={dayTemplates}
+              planner={planner}
+            />
+          );
+        })()
       ) : (
         <div style={screenPad}>
           {/* Week strip */}

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { C, card, sectionTitle, sectionLabel, dot, monoMicro, accentTint } from '../lib/theme.js';
-import { weekDaysFrom, weekISO, countEventsInWeek, habitWeeklyTarget } from '../lib/helpers.js';
+import { weekDaysFrom, weekISO, countEventsInWeek, habitWeeklyTarget, weekPlanAdherence } from '../lib/helpers.js';
 
 /**
  * Analytics: current week's stats + archived past weeks.
@@ -9,13 +9,13 @@ import { weekDaysFrom, weekISO, countEventsInWeek, habitWeeklyTarget } from '../
  *   tasks, events, habits, spaces (current data)
  *   archive: [{ weekStart: 'YYYY-MM-DD', snapshot: {...} }] (past weeks)
  */
-export function Analytics({ tasks, events, habits, spaces, archive }) {
+export function Analytics({ tasks, events, habits, spaces, archive, dayPlans = [] }) {
   const [activeWeek, setActiveWeek] = useState('current');
 
   const allWeeks = useMemo(() => {
-    const current = computeCurrentWeek({ tasks, events, habits, spaces });
+    const current = computeCurrentWeek({ tasks, events, habits, spaces, dayPlans });
     return [current, ...archive].slice(0, 12); // cap at 12 weeks back
-  }, [tasks, events, habits, spaces, archive]);
+  }, [tasks, events, habits, spaces, archive, dayPlans]);
 
   const active = activeWeek === 'current'
     ? allWeeks[0]
@@ -51,6 +51,7 @@ export function Analytics({ tasks, events, habits, spaces, archive }) {
 
       <Headline data={active} />
       <DayBars data={active} />
+      <PlanAdherence data={active} />
       <HabitBreakdown data={active} habits={habits} />
       <SpaceBreakdown data={active} spaces={spaces} />
       <Insights data={active} />
@@ -60,7 +61,7 @@ export function Analytics({ tasks, events, habits, spaces, archive }) {
 
 // ----- Computation -----
 
-function computeCurrentWeek({ tasks, events, habits, spaces }) {
+function computeCurrentWeek({ tasks, events, habits, spaces, dayPlans = [] }) {
   const week = weekISO();
   const weekStart = week[0];
 
@@ -119,6 +120,7 @@ function computeCurrentWeek({ tasks, events, habits, spaces }) {
     habitsCompleted: habitDone,
     habitSlots, habitPct,
     eventsCount: countEventsInWeek(events, week),
+    plan: weekPlanAdherence(dayPlans, week),
     byDay,
     perHabit,
     perSpace,
@@ -231,6 +233,39 @@ function Legend() {
       <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: C.t2 }}>
         <span style={dot(C.green, 8)} />Habits
       </span>
+    </div>
+  );
+}
+
+function PlanAdherence({ data }) {
+  const p = data.plan;
+  if (!p || p.daysPlanned === 0) return null;
+  const bars = [
+    { label: 'Adherence', pct: p.adherencePct, sub: `${p.blocksDone}/${p.blocksPlanned} blocks`, color: C.amber },
+    { label: 'On time', pct: p.onTimePct, sub: `of ${p.blocksDone} done`, color: C.green },
+  ];
+  return (
+    <div style={{ ...card, padding: 16, marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+        <div style={sectionLabel}>Plan adherence</div>
+        <span style={monoMicro}>{p.daysPlanned} day{p.daysPlanned === 1 ? '' : 's'} planned</span>
+      </div>
+      {bars.map(b => (
+        <div key={b.label} style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+            <span style={{ fontSize: 13 }}>{b.label}</span>
+            <span style={monoMicro}>{b.pct}% · {b.sub}</span>
+          </div>
+          <div style={{ height: 4, background: C.s3, borderRadius: 100, overflow: 'hidden' }}>
+            <div style={{ width: `${b.pct}%`, height: '100%', background: b.color, transition: 'width 0.3s' }} />
+          </div>
+        </div>
+      ))}
+      <div style={{ fontSize: 11, color: p.emergencyEdits ? C.red : C.t3, marginTop: 4 }}>
+        {p.emergencyEdits
+          ? `${p.emergencyEdits} emergency change${p.emergencyEdits === 1 ? '' : 's'} this week`
+          : 'No emergency changes — plan held'}
+      </div>
     </div>
   );
 }

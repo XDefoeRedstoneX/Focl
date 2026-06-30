@@ -8,9 +8,13 @@ export function Home({
   tasks, events, habits, spaces, settings, classes = [],
   toggleTask, toggleHabitDay, deleteTask, openEdit,
   quickAddTask, setScreen, onPlanTomorrow,
+  dayPlans = [], onOpenTodayPlan, toggleBlock,
 }) {
   const today = todayISO();
   const [quick, setQuick] = useState('');
+
+  const todaysPlan = dayPlans.find(p => p.date === today);
+  const planBlocks = (todaysPlan?.blocks || []).slice().sort((a, b) => a.start.localeCompare(b.start));
 
   const planningOpen = settings?.dayPlannerEnabled !== false
     && !!settings?.planningWindow
@@ -94,6 +98,15 @@ export function Home({
           </div>
         </div>
       </div>
+
+      {/* Today's plan: the locked timeline, as a checkable list */}
+      {planBlocks.length > 0 && (
+        <TodayPlanCard
+          blocks={planBlocks} spaces={spaces}
+          onToggle={(id) => toggleBlock?.(today, id)}
+          onOpen={onOpenTodayPlan}
+        />
+      )}
 
       {/* Planning-window CTA: only appears during the nightly window */}
       {planningOpen && onPlanTomorrow && (
@@ -183,6 +196,46 @@ export function Home({
 
       {/* Habit strip */}
       <HabitStrip habits={habitsToday} today={today} done={habitsDone} toggle={toggleHabitDay} setScreen={setScreen} />
+    </div>
+  );
+}
+
+function TodayPlanCard({ blocks, spaces, onToggle, onOpen }) {
+  const done = blocks.filter(b => b.done).length;
+  const spaceColor = (id) => spaces.find(s => s.id === id)?.color || C.blue;
+  return (
+    <div style={{ ...card, marginTop: 14, padding: 16, borderRadius: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={sectionTitle}>Today's plan</div>
+        <button
+          onClick={onOpen}
+          style={{ background: 'none', border: 'none', color: C.amber, fontSize: 12, cursor: 'pointer', padding: 0 }}
+        >{done} of {blocks.length} →</button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {blocks.map(b => {
+          const col = spaceColor(b.spaceId);
+          return (
+            <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+              <button
+                onClick={() => onToggle(b.id)}
+                aria-label={b.done ? 'Mark not done' : 'Mark done'}
+                style={{
+                  width: 20, height: 20, flexShrink: 0, borderRadius: 6, padding: 0, cursor: 'pointer',
+                  border: `1.5px solid ${b.done ? col : C.t3}`, background: b.done ? col : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >{b.done && <span style={{ color: C.bg, fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}</button>
+              <span style={{ width: 58, flexShrink: 0, fontSize: 11, fontFamily: 'DM Mono', color: C.t3 }}>{fmtTime(b.start)}</span>
+              <span style={{
+                flex: 1, minWidth: 0, fontSize: 13.5,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                textDecoration: b.done ? 'line-through' : 'none', color: b.done ? C.t3 : C.t1,
+              }}>{b.title}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

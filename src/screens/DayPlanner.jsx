@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { C, card, inp } from '../lib/theme.js';
 import {
-  newId, fmtDate, hmToMin, minToHM, snapMin, blocksOverlap,
+  newId, todayISO, fmtDate, hmToMin, minToHM, snapMin, blocksOverlap,
   classOccursOn, minutesUntilWindow,
 } from '../lib/helpers.js';
 import { Chip, Field, Confirm } from '../components/ui.jsx';
@@ -36,11 +36,29 @@ export function DayPlanner({
   date, mode, window, dayPlan, classes, tasks, spaces,
   blockTemplates, dayTemplates, planner,
 }) {
-  const editable = mode === 'edit';
+  const editable = mode === 'edit';            // building tomorrow
+  const isToday = date === todayISO();
   const [drag, setDrag] = useState(null);     // { id, start, end } in minutes, during a gesture
   const [editing, setEditing] = useState(null); // block being edited in the modal
   const [sheet, setSheet] = useState(null);    // 'palette' | 'templates' | null
   const [naming, setNaming] = useState(false);  // save-day-template name modal
+  const [emergency, setEmergency] = useState(false);       // editing a locked plan
+  const [confirmEmergency, setConfirmEmergency] = useState(false);
+  const canEdit = editable || emergency;       // may mutate the timeline now
+  const showChecks = mode === 'locked' && !emergency; // execute mode: check blocks off
+
+  // Mutations route through the emergency-edit log when the plan is locked.
+  const mutate = {
+    update: (id, patch) => emergency
+      ? planner.emergencyEdit(date, { kind: 'update', id, patch }, 'edited')
+      : planner.updateBlock(date, id, patch),
+    add: (block) => emergency
+      ? planner.emergencyEdit(date, { kind: 'add', block }, 'added')
+      : planner.addBlock(date, block),
+    remove: (id) => emergency
+      ? planner.emergencyEdit(date, { kind: 'remove', id }, 'removed')
+      : planner.removeBlock(date, id),
+  };
 
   const spaceColor = (id) => spaces.find(s => s.id === id)?.color;
   const userBlocks = dayPlan?.blocks || [];
@@ -63,7 +81,7 @@ export function DayPlanner({
 
   // --- drag to move / resize, snapping to the 15-min grid ---
   const beginDrag = (ev, block, kind) => {
-    if (!editable || block.pinned) return;
+    if (!canEdit || block.pinned) return;
     ev.stopPropagation();
     const startY = ev.clientY;
     const origStart = hmToMin(block.start);
@@ -90,7 +108,7 @@ export function DayPlanner({
       globalThis.removeEventListener('pointerup', onUp);
       setDrag(null);
       if (moved) {
-        planner.updateBlock(date, block.id, { start: minToHM(latest.start), end: minToHM(latest.end) });
+        mutate.update(block.id, { start: minToHM(latest.start), end: minToHM(latest.end) });
       } else {
         setEditing(block);
       }
@@ -109,7 +127,7 @@ export function DayPlanner({
     return { start: minToHM(s), end: minToHM(s + durMin) };
   };
   const add = (partial, durMin = 60) =>
-    planner.addBlock(date, { id: newId(), done: false, spaceId: '', ...findSlot(durMin), ...partial });
+    mutate.add({ id: newId(), done: false, spaceId: '', ...findSlot(durMin), ...partial });
 
   const addCustom = (title) => { if (title.trim()) add({ title: title.trim(), kind: 'custom' }); };
   const addTask = (t) => add({ title: t.name, kind: 'task', refId: t.id, spaceId: t.spaceId });
@@ -145,7 +163,7 @@ export function DayPlanner({
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', margin: '4px 2px 12px' }}>
         <div>
-          <div style={{ fontSize: 17, fontWeight: 600 }}>Tomorrow</div>
+          <div style={{ fontSize: 17, fontWeight: 600 }}>{isToday ? "Today's plan" : 'Tomorrow'}</div>
           <div style={{ fontSize: 12, color: C.t2, marginTop: 2 }}>{fmtDate(date)}</div>
         </div>
         <div style={{ fontSize: 11, fontFamily: 'DM Mono', color: C.t3, textAlign: 'right' }}>
@@ -154,29 +172,56 @@ export function DayPlanner({
         </div>
       </div>
 
-      {/* Closed-window banner */}
-      {!editable && (
+      {/* Future day, not yet plannable */}
+      {mode === 'readonly' && (
         <div style={{ ...card, padding: 16, marginBottom: 14, borderLeft: `3px solid ${C.bookmark}` }}>
           <div style={{ fontSize: 14, fontWeight: 500 }}>The planner opens at {fmtMin(hmToMin(window.start))}</div>
           <div style={{ fontSize: 12, color: C.t2, marginTop: 4 }}>
-            {mode === 'locked'
-              ? 'Tomorrow has already begun — this plan is locked.'
-              : `Come back to build tomorrow. Opens in ${fmtCountdown(minutesUntilWindow(new Date(), window))}.`}
+            Come back to build tomorrow. Opens in {fmtCountdown(minutesUntilWindow(new Date(), window))}.
           </div>
         </div>
       )}
 
+      {/* Locked today with nothing planned */}
+      {mode === 'locked' && userBlocks.length === 0 && !emergency && (
+        <div style={{ ...card, padding: 16, marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>No plan locked in for today</div>
+          <div style={{ fontSize: 12, color: C.t2, marginTop: 4 }}>Build your day the night before to see it here.</div>
+        </div>
+      )}
+
       {/* Action row */}
-      {editable && (
+      {(editable || emergency) && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <button
             onClick={() => setSheet('palette')}
             style={{ flex: 1, padding: 11, borderRadius: 12, border: 'none', background: C.amber, color: C.bg, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
           >+ Add block</button>
-          <button
-            onClick={() => setSheet('templates')}
-            style={{ padding: '11px 16px', borderRadius: 12, border: `0.5px solid ${C.border}`, background: C.s2, color: C.t1, fontSize: 13, cursor: 'pointer' }}
-          >Templates</button>
+          {editable && (
+            <button
+              onClick={() => setSheet('templates')}
+              style={{ padding: '11px 16px', borderRadius: 12, border: `0.5px solid ${C.border}`, background: C.s2, color: C.t1, fontSize: 13, cursor: 'pointer' }}
+            >Templates</button>
+          )}
+          {emergency && (
+            <button
+              onClick={() => setEmergency(false)}
+              style={{ padding: '11px 16px', borderRadius: 12, border: `0.5px solid ${C.border}`, background: C.s2, color: C.t1, fontSize: 13, cursor: 'pointer' }}
+            >Done</button>
+          )}
+        </div>
+      )}
+
+      {/* Emergency entry / banner for a locked plan */}
+      {mode === 'locked' && userBlocks.length > 0 && !emergency && (
+        <button
+          onClick={() => setConfirmEmergency(true)}
+          style={{ width: '100%', padding: 11, marginBottom: 12, borderRadius: 12, border: `0.5px solid ${C.red}55`, background: 'transparent', color: C.red, fontSize: 13, cursor: 'pointer' }}
+        >Emergency change</button>
+      )}
+      {emergency && (
+        <div style={{ ...card, padding: '9px 12px', marginBottom: 12, borderLeft: `3px solid ${C.red}` }}>
+          <span style={{ fontSize: 12, color: C.t2 }}>Emergency editing — every change is logged.</span>
         </div>
       )}
 
@@ -209,16 +254,28 @@ export function DayPlanner({
                   position: 'absolute', top, left: 4, right: 4, height,
                   background: `${col}1f`, border: `0.5px solid ${col}66`, borderLeft: `3px solid ${col}`,
                   borderRadius: 8, padding: '4px 8px', overflow: 'hidden',
-                  touchAction: b.pinned || !editable ? 'auto' : 'none',
-                  cursor: b.pinned || !editable ? 'default' : 'grab',
+                  touchAction: b.pinned || !canEdit ? 'auto' : 'none',
+                  cursor: b.pinned || !canEdit ? 'default' : 'grab',
                   boxShadow: bad ? `inset 0 0 0 1px ${C.red}` : 'none',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   {b.pinned && <span style={{ fontSize: 8 }}>📌</span>}
-                  <span style={{ fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: b.done ? 'line-through' : 'none', color: b.done ? C.t3 : C.t1 }}>
+                  <span style={{ flex: 1, fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: b.done ? 'line-through' : 'none', color: b.done ? C.t3 : C.t1 }}>
                     {b.title}
                   </span>
+                  {showChecks && !b.pinned && (
+                    <button
+                      onPointerDown={(ev) => ev.stopPropagation()}
+                      onClick={(ev) => { ev.stopPropagation(); planner.toggleBlock(date, b.id); }}
+                      aria-label={b.done ? 'Mark not done' : 'Mark done'}
+                      style={{
+                        width: 18, height: 18, flexShrink: 0, borderRadius: 6, padding: 0, cursor: 'pointer',
+                        border: `1.5px solid ${b.done ? col : C.t3}`, background: b.done ? col : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >{b.done && <span style={{ color: C.bg, fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}</button>
+                  )}
                 </div>
                 {height > 30 && (
                   <div style={{ fontSize: 9, fontFamily: 'DM Mono', color: C.t2, marginTop: 2 }}>
@@ -226,7 +283,7 @@ export function DayPlanner({
                   </div>
                 )}
                 {/* Resize handle */}
-                {editable && !b.pinned && (
+                {canEdit && !b.pinned && (
                   <div
                     onPointerDown={(ev) => beginDrag(ev, b, 'resize')}
                     style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 12, cursor: 'ns-resize', touchAction: 'none' }}
@@ -256,8 +313,8 @@ export function DayPlanner({
       {editing && (
         <BlockEditor
           block={userBlocks.find(b => b.id === editing.id) || editing}
-          onChange={(patch) => planner.updateBlock(date, editing.id, patch)}
-          onRemove={() => { planner.removeBlock(date, editing.id); setEditing(null); }}
+          onChange={(patch) => mutate.update(editing.id, patch)}
+          onRemove={() => { mutate.remove(editing.id); setEditing(null); }}
           onSaveTemplate={() => { saveAsTemplate(userBlocks.find(b => b.id === editing.id) || editing); setEditing(null); }}
           onClose={() => setEditing(null)}
         />
@@ -295,6 +352,15 @@ export function DayPlanner({
           title="Name this day template"
           onSave={saveDayTemplate}
           onCancel={() => setNaming(false)}
+        />
+      )}
+
+      {confirmEmergency && (
+        <Confirm
+          title="Make an emergency change?"
+          message="Today's plan is locked. This change is recorded and counts toward your plan-discipline stats."
+          onConfirm={() => { setEmergency(true); setConfirmEmergency(false); }}
+          onCancel={() => setConfirmEmergency(false)}
         />
       )}
     </div>
