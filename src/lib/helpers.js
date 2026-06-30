@@ -178,14 +178,20 @@ export const eventOccursOn = (event, dateISO) => {
   return false;
 };
 
-// Merge events (by occurrence) and tasks (by deadline) into a single
-// agenda for one day, sorted by time. Untimed tasks sort after timed
-// items. Returns [{ kind, item, time }] where time is 'HH:MM' or null.
-export const agendaForDay = (tasks, events, dateISO) => {
+// Merge events (by occurrence), classes (by weekly timetable) and tasks (by
+// deadline) into a single agenda for one day, sorted by time. Untimed tasks
+// sort after timed items. Returns [{ kind, item, time }] where time is
+// 'HH:MM' or null. `classes` is optional so 3-arg callers keep working.
+export const agendaForDay = (tasks, events, dateISO, classes = []) => {
   const entries = [];
   for (const e of events) {
     if (eventOccursOn(e, dateISO)) {
       entries.push({ kind: 'event', item: e, time: e.startDatetime.slice(11, 16) || null });
+    }
+  }
+  for (const c of classes) {
+    if (classOccursOn(c, dateISO)) {
+      entries.push({ kind: 'class', item: c, time: c.start || null });
     }
   }
   for (const t of tasks) {

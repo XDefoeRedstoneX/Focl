@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { intId, buildFireDate, buildNotificationSpecs } from './notifications.js';
+import { intId, buildFireDate, buildNotificationSpecs, classReminderItem } from './notifications.js';
 
 describe('intId', () => {
   it('is deterministic for the same input', () => {
@@ -149,5 +149,37 @@ describe('buildNotificationSpecs', () => {
     // events stay dismissable
     expect(specs[0].ongoing).toBe(false);
     expect(specs[0].autoCancel).toBe(true);
+  });
+});
+
+describe('classReminderItem', () => {
+  const cls = (over = {}) => ({
+    id: 'c1', name: 'Algorithms', spaceId: '', days: ['Mon', 'Wed'],
+    start: '11:00', end: '12:30', location: 'Hall B', weeks: 'all', active: true,
+    reminder: { timing: '10min' }, ...over,
+  });
+
+  it('maps an armed class to a custom-day reminder item', () => {
+    const item = classReminderItem(cls());
+    expect(item).toMatchObject({
+      id: 'c1', name: 'Algorithms', recurrence: 'custom',
+      customDays: ['Mon', 'Wed'], notes: 'Class · Hall B',
+      notifications: [{ timing: '10min', time: '11:00' }],
+    });
+  });
+
+  it('arms nothing when there is no reminder or the class is inactive', () => {
+    expect(classReminderItem(cls({ reminder: null })).notifications).toEqual([]);
+    expect(classReminderItem(cls({ active: false })).notifications).toEqual([]);
+  });
+
+  it('schedules weekly per meeting day with the lead-time applied', () => {
+    const specs = buildNotificationSpecs(classReminderItem(cls()), 'event');
+    // Mon=2, Wed=4 in Capacitor's Sunday-first numbering; 11:00 − 10min = 10:50
+    expect(specs.map(s => s.schedule.on)).toEqual([
+      { weekday: 2, hour: 10, minute: 50 },
+      { weekday: 4, hour: 10, minute: 50 },
+    ]);
+    expect(specs[0].body).toBe('Class · Hall B');
   });
 });

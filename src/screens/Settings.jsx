@@ -74,6 +74,12 @@ export function Settings({ settings, updateSettings, state, importState, resetAl
       <div style={sectionLabel}>Manage</div>
       <div style={{ ...card, overflow: 'hidden', marginBottom: 20 }}>
         <Row label="Spaces" sub={`${state.spaces.length} space${state.spaces.length === 1 ? '' : 's'}`} onClick={() => setScreen('spaces')} />
+        <Row
+          label="Class schedule"
+          sub={`${(state.classes?.length || 0)} class${(state.classes?.length || 0) === 1 ? '' : 'es'}`}
+          onClick={() => setScreen('classes')}
+          borderTop
+        />
       </div>
 
       {/* Auto-cleanup */}

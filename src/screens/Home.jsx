@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { C, card, monoMicro, sectionTitle, dot, inp } from '../lib/theme.js';
-import { todayISO, fmtTime, isHabitDueOn, eventOccursOn } from '../lib/helpers.js';
+import { todayISO, fmtTime, isHabitDueOn, eventOccursOn, classOccursOn } from '../lib/helpers.js';
 
 const RING_CIRCUMFERENCE = 2 * Math.PI * 52; // r = 52
 
 export function Home({
-  tasks, events, habits, spaces, settings,
+  tasks, events, habits, spaces, settings, classes = [],
   toggleTask, toggleHabitDay, deleteTask, openEdit,
   quickAddTask, setScreen,
 }) {
@@ -31,7 +31,7 @@ export function Home({
 
   const bestStreak = Math.max(0, ...habits.map(h => h.streakBest || 0));
 
-  const upNext = nextUpEvent(events, today);
+  const upNext = nextUpItem(events, classes, today);
 
   const submitQuick = () => {
     const name = quick.trim();
@@ -271,24 +271,28 @@ function overdueLabel(deadline) {
   return `${days}d overdue`;
 }
 
-// Next event occurring today whose start time is still ahead of now.
-function nextUpEvent(events, today) {
+// Next event or class occurring today whose start time is still ahead of now.
+function nextUpItem(events, classes, today) {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const candidates = events
-    .filter(e => eventOccursOn(e, today))
-    .map(e => {
-      const [h, m] = e.startDatetime.slice(11, 16).split(':').map(Number);
-      return { e, mins: h * 60 + m, time: e.startDatetime.slice(11, 16) };
-    })
-    .filter(x => x.mins >= nowMin)
-    .sort((a, b) => a.mins - b.mins);
-  if (!candidates.length) return null;
+  const candidates = [];
+  for (const e of events) {
+    if (!eventOccursOn(e, today)) continue;
+    const time = e.startDatetime.slice(11, 16);
+    const [h, m] = time.split(':').map(Number);
+    candidates.push({ name: e.name, spaceId: e.spaceId, mins: h * 60 + m, time });
+  }
+  for (const c of classes) {
+    if (!classOccursOn(c, today) || !c.start) continue;
+    const [h, m] = c.start.split(':').map(Number);
+    candidates.push({ name: c.name, spaceId: c.spaceId, mins: h * 60 + m, time: c.start });
+  }
+  const upcoming = candidates.filter(x => x.mins >= nowMin).sort((a, b) => a.mins - b.mins);
+  if (!upcoming.length) return null;
 
-  const { e, mins, time } = candidates[0];
+  const { name, spaceId, mins, time } = upcoming[0];
   const delta = mins - nowMin;
   const inLabel = delta < 60 ? `in ${delta} min` : delta < 1440 ? `in ${Math.round(delta / 60)} h` : 'today';
-  const label12 = fmtTime(time); // "9:30 AM"
-  const [clock, ampm] = label12.split(' ');
-  return { name: e.name, spaceId: e.spaceId, timeLabel: clock, ampm, inLabel };
+  const [clock, ampm] = fmtTime(time).split(' '); // "9:30 AM"
+  return { name, spaceId, timeLabel: clock, ampm, inLabel };
 }

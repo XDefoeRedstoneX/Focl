@@ -302,4 +302,17 @@ describe('agendaForDay', () => {
   it('is empty for a quiet day', () => {
     expect(agendaForDay(tasks, events, '2026-06-15')).toEqual([]);
   });
+
+  it('merges classes by weekday, sorted in among timed items', () => {
+    // 2026-06-10 is a Wednesday.
+    const classes = [{ id: 'c1', name: 'Algebra', spaceId: '', days: ['Wed'], start: '11:00', end: '12:00', weeks: 'all' }];
+    const agenda = agendaForDay(tasks, events, '2026-06-10', classes);
+    expect(agenda.map(a => a.item.id)).toEqual(['e1', 'c1', 'e2', 't1']);
+    expect(agenda.find(a => a.item.id === 'c1')).toMatchObject({ kind: 'class', time: '11:00' });
+  });
+
+  it('omits classes that do not meet that weekday', () => {
+    const classes = [{ id: 'c1', name: 'Algebra', spaceId: '', days: ['Mon'], start: '11:00', end: '12:00', weeks: 'all' }];
+    expect(agendaForDay(tasks, events, '2026-06-10', classes).some(a => a.kind === 'class')).toBe(false);
+  });
 });

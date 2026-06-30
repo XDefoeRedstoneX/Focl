@@ -3,7 +3,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { CAP_WEEKDAY } from './helpers.js';
+import { CAP_WEEKDAY, todayISO } from './helpers.js';
 
 const isNative = () => Capacitor.isNativePlatform();
 
@@ -179,11 +179,32 @@ export async function cancelItem(itemId) {
 // Cancel and re-arm every reminder. Run at startup: repairs items saved
 // before permission was granted, alarms dropped by reboots or OEM battery
 // managers, and re-arms biweekly one-shots.
-export async function resyncAll(tasks, events) {
+// Adapt a class into an event-shaped reminder item so it flows through the
+// existing schedule pipeline: anchored to today + the class start time, with
+// a custom-day recurrence that fires weekly on each meeting day. A class with
+// no reminder (or inactive) yields an empty `notifications`, so it gets
+// cancelled but never scheduled.
+// NOTE: odd/even-week classes still remind every week here — biweekly reminder
+// precision is a later refinement; the agenda itself already respects parity.
+export function classReminderItem(cls) {
+  const armed = cls.reminder && cls.active !== false && cls.start;
+  return {
+    id: cls.id,
+    name: cls.name,
+    notes: cls.location ? `Class · ${cls.location}` : 'Class',
+    startDatetime: `${todayISO()}T${cls.start || '00:00'}:00`,
+    recurrence: 'custom',
+    customDays: cls.days || [],
+    notifications: armed ? [{ timing: cls.reminder.timing, time: cls.start }] : [],
+  };
+}
+
+export async function resyncAll(tasks, events, classes = []) {
   if (!isNative()) return;
   const items = [
     ...tasks.map(t => [t, 'task']),
     ...events.map(e => [e, 'event']),
+    ...classes.map(c => [classReminderItem(c), 'event']),
   ];
   await Promise.all(items.map(([i]) => cancelItem(i.id)));
 

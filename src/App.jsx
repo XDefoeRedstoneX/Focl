@@ -6,7 +6,7 @@ import { C, fonts } from './lib/theme.js';
 import { todayISO, newId, setWeekStart, greeting, dateKicker } from './lib/helpers.js';
 import { loadState, saveStateField } from './lib/storage.js';
 import { DEFAULTS } from './lib/seed.js';
-import { initNotifications, resyncAll, scheduleItem, cancelItem } from './lib/notifications.js';
+import { initNotifications, resyncAll, scheduleItem, cancelItem, classReminderItem } from './lib/notifications.js';
 import { setHapticsEnabled, tapLight, tapMedium } from './lib/haptics.js';
 import {
   reducer, initialState, DEFAULT_SETTINGS, PERSISTED_KEYS,
@@ -26,6 +26,7 @@ import { Spaces } from './screens/Spaces.jsx';
 import { Settings } from './screens/Settings.jsx';
 import { Analytics } from './screens/Analytics.jsx';
 import { Workout } from './screens/Workout.jsx';
+import { Classes } from './screens/Classes.jsx';
 
 const blankDraft = (type = 'task') => ({
   id: null,
@@ -94,7 +95,7 @@ export default function App() {
   const [editMode, setEditMode] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const { spaces, tasks, events, habits, settings, archive, kits, plan, sessions } = state;
+  const { spaces, tasks, events, habits, settings, archive, kits, plan, sessions, classes } = state;
 
   // Initial load: hydrate, run daily maintenance (pure), then re-arm every
   // reminder. The full resync (rather than only rolled tasks) repairs items
@@ -110,7 +111,7 @@ export default function App() {
       const { state: next } = runDailyMaintenance(s);
 
       initNotifications()
-        .then(() => resyncAll(next.tasks, next.events))
+        .then(() => resyncAll(next.tasks, next.events, next.classes))
         .catch(() => {});
 
       dispatch({ type: 'load', state: next });
@@ -154,6 +155,7 @@ export default function App() {
           if (s === 'notif') { setScreen('add'); return; }
           if (s === 'add') { setScreen('home'); return; }
           if (s === 'spaces') { setScreen('settings'); return; }
+          if (s === 'classes') { setScreen('settings'); return; }
           if (s !== 'home') { setScreen('home'); return; }
 
           // On home: double-press to exit
@@ -346,6 +348,24 @@ export default function App() {
 
   const deleteSpace = (id) => dispatch({ type: 'space/delete', id });
 
+  // === Class schedule handlers ===
+
+  const saveClass = (cls) => {
+    tapMedium();
+    const full = { ...cls, id: cls.id || newId() };
+    dispatch({ type: 'class/save', class: full });
+    // Re-arm the class's reminder from scratch (covers edits that change the
+    // day/time/timing or toggle it off).
+    cancelItem(full.id)
+      .then(() => scheduleItem(classReminderItem(full), 'event'))
+      .catch(() => {});
+  };
+
+  const deleteClass = (id) => {
+    cancelItem(id).catch(() => {});
+    dispatch({ type: 'class/delete', id });
+  };
+
   // === Workout handlers ===
 
   const saveKit = (kit) => {
@@ -431,7 +451,7 @@ export default function App() {
             {screen === 'home' && (
               <Home
                 tasks={tasks} events={events} habits={habits} spaces={spaces}
-                settings={settings}
+                settings={settings} classes={classes}
                 toggleTask={toggleTask} toggleHabitDay={toggleHabitDay}
                 deleteTask={deleteTask} openEdit={openEdit}
                 quickAddTask={quickAddTask} setScreen={setScreen}
@@ -439,8 +459,8 @@ export default function App() {
             )}
             {screen === 'plan' && (
               <Plan
-                tasks={tasks} events={events} spaces={spaces}
-                openEdit={openEdit}
+                tasks={tasks} events={events} spaces={spaces} classes={classes}
+                openEdit={openEdit} setScreen={setScreen}
               />
             )}
             {screen === 'habits' && (
@@ -467,6 +487,13 @@ export default function App() {
                 setScreen={setScreen}
               />
             )}
+            {screen === 'classes' && (
+              <Classes
+                classes={classes} spaces={spaces}
+                saveClass={saveClass} deleteClass={deleteClass}
+                setScreen={setScreen}
+              />
+            )}
             {screen === 'workout' && (
               <Workout
                 kits={kits} plan={plan} sessions={sessions} habits={habits}
@@ -485,7 +512,7 @@ export default function App() {
               <Settings
                 settings={settings}
                 updateSettings={updateSettings}
-                state={{ spaces, tasks, events, habits, kits, plan, sessions }}
+                state={{ spaces, tasks, events, habits, kits, plan, sessions, classes, dayPlans: state.dayPlans, blockTemplates: state.blockTemplates, dayTemplates: state.dayTemplates }}
                 importState={importState}
                 resetAll={resetAll}
                 stats={stats}

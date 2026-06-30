@@ -4,13 +4,13 @@ import { todayISO, weekISO, weekDaysFrom, fmtTime, agendaForDay } from '../lib/h
 
 // Calendar/agenda: a week strip to pick a day, and a timeline merging that
 // day's events and scheduled tasks. Tapping a row opens the item for edit.
-export function Plan({ tasks, events, spaces, openEdit }) {
+export function Plan({ tasks, events, spaces, classes = [], openEdit, setScreen }) {
   const today = todayISO();
   const [selected, setSelected] = useState(today);
   const week = weekISO();
   const dayKeys = weekDaysFrom();
 
-  const agenda = agendaForDay(tasks, events, selected);
+  const agenda = agendaForDay(tasks, events, selected, classes);
   const spaceColor = (id) => spaces.find(s => s.id === id)?.color || C.amber;
 
   const sel = new Date(selected + 'T00:00:00');
@@ -25,7 +25,7 @@ export function Plan({ tasks, events, spaces, openEdit }) {
         {week.map((d, i) => {
           const isSel = d === selected;
           const isToday = d === today;
-          const has = agendaForDay(tasks, events, d).length > 0;
+          const has = agendaForDay(tasks, events, d, classes).length > 0;
           const dateNum = new Date(d + 'T00:00:00').getDate();
           return (
             <button
@@ -73,9 +73,16 @@ export function Plan({ tasks, events, spaces, openEdit }) {
           {agenda.map(({ kind, item, time }) => {
             const color = spaceColor(item.spaceId);
             const isEvent = kind === 'event';
+            const isClass = kind === 'class';
             const meta = isEvent
               ? `${fmtTime(item.startDatetime.slice(11, 16))} – ${fmtTime(item.endDatetime.slice(11, 16))}`
-              : (item.priority || 'task');
+              : isClass
+                ? `${fmtTime(item.start)} – ${fmtTime(item.end)}${item.location ? ` · ${item.location}` : ''}`
+                : (item.priority || 'task');
+            const label = isEvent ? 'Event' : isClass ? 'Class' : 'Task';
+            // Classes are edited in the Settings schedule editor, not the
+            // add/edit sheet that tasks and events use.
+            const onClick = isClass ? () => setScreen?.('classes') : () => openEdit(item, kind);
             return (
               <div key={`${kind}-${item.id}`} style={{ display: 'flex', gap: 12 }}>
                 {/* Time gutter */}
@@ -86,7 +93,7 @@ export function Plan({ tasks, events, spaces, openEdit }) {
                 </div>
                 {/* Card */}
                 <button
-                  onClick={() => openEdit(item, kind)}
+                  onClick={onClick}
                   style={{
                     ...card, flex: 1, minWidth: 0, textAlign: 'left', cursor: 'pointer',
                     padding: '12px 14px', borderLeft: `3px solid ${color}`, color: C.t1,
@@ -100,9 +107,9 @@ export function Plan({ tasks, events, spaces, openEdit }) {
                       fontSize: 9, fontFamily: 'DM Mono', textTransform: 'uppercase',
                       padding: '2px 6px', borderRadius: 5,
                       background: `${color}1c`, color,
-                    }}>{isEvent ? 'Event' : 'Task'}</span>
+                    }}>{label}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5, ...monoMicro }}>
-                      {!isEvent && <span style={dot(color)} />}{meta}
+                      {!isEvent && !isClass && <span style={dot(color)} />}{meta}
                     </span>
                   </div>
                 </button>
