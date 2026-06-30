@@ -3,7 +3,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { CAP_WEEKDAY, todayISO } from './helpers.js';
+import { CAP_WEEKDAY, todayISO, nextClassDate } from './helpers.js';
 
 const isNative = () => Capacitor.isNativePlatform();
 
@@ -121,13 +121,16 @@ function schedulesFor(item, kind, n, now) {
 
 // Pure: the exact notification objects handed to the plugin for an item.
 export function buildNotificationSpecs(item, kind, now = Date.now()) {
-  // A completed one-off task has nothing left to remind about, so it must
-  // not be (re-)armed — including by the startup resync. Recurring tasks
+  // Tasks and planner blocks are "sticky": they stay in the shade until done.
+  const sticky = kind === 'task' || kind === 'block';
+  // A completed one-off sticky item has nothing left to remind about, so it
+  // must not be (re-)armed — including by the startup resync. Recurring tasks
   // keep their repeating schedule: today's `done` is transient and future
   // occurrences still need the reminder.
-  if (kind === 'task' && item.done && (!item.recurrence || item.recurrence === 'none')) {
+  if (sticky && item.done && (!item.recurrence || item.recurrence === 'none')) {
     return [];
   }
+  const body = item.notes || { task: 'Task reminder', block: 'Block reminder' }[kind] || 'Event reminder';
   const specs = [];
   for (const n of item.notifications || []) {
     for (const schedule of schedulesFor(item, kind, n, now)) {
@@ -135,12 +138,12 @@ export function buildNotificationSpecs(item, kind, now = Date.now()) {
       specs.push({
         id: intId(`${item.id}:${specs.length}`),
         title: item.name,
-        body: item.notes || (kind === 'task' ? 'Task reminder' : 'Event reminder'),
+        body,
         channelId: CHANNEL_ID,
-        // Tasks stay in the shade until completed (completing cancels them);
-        // events are informational and dismissable as usual.
-        ongoing: kind === 'task',
-        autoCancel: kind !== 'task',
+        // Sticky items stay until completed (completing cancels them); events
+        // and classes are informational and dismissable as usual.
+        ongoing: sticky,
+        autoCancel: !sticky,
         schedule,
       });
     }
@@ -180,22 +183,49 @@ export async function cancelItem(itemId) {
 // before permission was granted, alarms dropped by reboots or OEM battery
 // managers, and re-arms biweekly one-shots.
 // Adapt a class into an event-shaped reminder item so it flows through the
-// existing schedule pipeline: anchored to today + the class start time, with
-// a custom-day recurrence that fires weekly on each meeting day. A class with
-// no reminder (or inactive) yields an empty `notifications`, so it gets
-// cancelled but never scheduled.
-// NOTE: odd/even-week classes still remind every week here — biweekly reminder
-// precision is a later refinement; the agenda itself already respects parity.
+// existing schedule pipeline. A class with no reminder (or inactive) yields an
+// empty `notifications`, so it gets cancelled but never scheduled.
+//   - every-week classes use a custom-day recurrence (fires weekly per day).
+//   - odd/even-week classes can't be expressed as a repeating schedule, so
+//     they arm a one-shot at the next matching occurrence; the startup resync
+//     re-arms the following one (same approach as biweekly events).
 export function classReminderItem(cls) {
   const armed = cls.reminder && cls.active !== false && cls.start;
-  return {
+  const base = {
     id: cls.id,
     name: cls.name,
     notes: cls.location ? `Class · ${cls.location}` : 'Class',
-    startDatetime: `${todayISO()}T${cls.start || '00:00'}:00`,
-    recurrence: 'custom',
-    customDays: cls.days || [],
-    notifications: armed ? [{ timing: cls.reminder.timing, time: cls.start }] : [],
+  };
+  const weeks = cls.weeks || 'all';
+  if (!armed || weeks === 'all') {
+    return {
+      ...base,
+      startDatetime: `${todayISO()}T${cls.start || '00:00'}:00`,
+      recurrence: 'custom',
+      customDays: cls.days || [],
+      notifications: armed ? [{ timing: cls.reminder.timing, time: cls.start }] : [],
+    };
+  }
+  const next = nextClassDate(cls, todayISO());
+  return {
+    ...base,
+    startDatetime: `${next || todayISO()}T${cls.start}:00`,
+    recurrence: 'none',
+    notifications: next ? [{ timing: cls.reminder.timing, time: cls.start }] : [],
+  };
+}
+
+// Adapt a planner block into a sticky (ongoing) one-shot reminder for its
+// specific date. No reminder → empty notifications, so it is only cancelled.
+export function blockReminderItem(block, dateISO) {
+  return {
+    id: block.id,
+    name: block.title,
+    notes: 'Planned block',
+    startDatetime: `${dateISO}T${block.start}`,
+    recurrence: 'none',
+    done: block.done,
+    notifications: block.reminder ? [{ timing: block.reminder.timing, time: block.start }] : [],
   };
 }
 

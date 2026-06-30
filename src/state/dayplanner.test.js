@@ -4,7 +4,7 @@ import { runDailyMaintenance } from './maintenance.js';
 import {
   hmToMin, minToHM, snapMin, blocksOverlap, minutesUntilWindow,
   isPlanningWindow, plannableDate, planEditMode,
-  classOccursOn, planAdherence, weekPlanAdherence,
+  classOccursOn, planAdherence, weekPlanAdherence, nextClassDate,
 } from '../lib/helpers.js';
 
 const base = (over = {}) => ({ ...initialState, ...over });
@@ -104,6 +104,26 @@ describe('classOccursOn', () => {
     expect(odd).toBe(!oddNext);
     // 'all' ignores parity.
     expect(classOccursOn(cls({ weeks: 'all' }), '2026-06-29')).toBe(true);
+  });
+});
+
+describe('nextClassDate', () => {
+  it('finds the next meeting day on or after the date', () => {
+    // 2026-06-29 is Monday. A Wed-only class → 2026-07-01.
+    expect(nextClassDate({ days: ['Wed'], weeks: 'all', active: true }, '2026-06-29')).toBe('2026-07-01');
+    // the from-date itself counts when it matches
+    expect(nextClassDate({ days: ['Mon'], weeks: 'all', active: true }, '2026-06-29')).toBe('2026-06-29');
+  });
+
+  it('skips to the right week for odd/even classes', () => {
+    const odd = nextClassDate({ days: ['Mon'], weeks: 'odd', active: true }, '2026-06-29');
+    const even = nextClassDate({ days: ['Mon'], weeks: 'even', active: true }, '2026-06-29');
+    // one parity lands on this Monday, the other on next Monday
+    expect([odd, even].sort()).toEqual(['2026-06-29', '2026-07-06']);
+  });
+
+  it('returns null when no days are set', () => {
+    expect(nextClassDate({ days: [], weeks: 'all', active: true }, '2026-06-29')).toBe(null);
   });
 });
 

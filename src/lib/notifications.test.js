@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { intId, buildFireDate, buildNotificationSpecs, classReminderItem } from './notifications.js';
+import { intId, buildFireDate, buildNotificationSpecs, classReminderItem, blockReminderItem } from './notifications.js';
+import { classOccursOn } from './helpers.js';
 
 describe('intId', () => {
   it('is deterministic for the same input', () => {
@@ -181,5 +182,41 @@ describe('classReminderItem', () => {
       { weekday: 4, hour: 10, minute: 50 },
     ]);
     expect(specs[0].body).toBe('Class · Hall B');
+  });
+
+  it('arms a one-shot at the next matching occurrence for odd/even weeks', () => {
+    const odd = cls({ weeks: 'odd', start: '14:00', reminder: { timing: '30min' } });
+    const item = classReminderItem(odd);
+    expect(item.recurrence).toBe('none');
+    expect(item.notifications).toEqual([{ timing: '30min', time: '14:00' }]);
+    // the anchored date is an actual meeting day for this class
+    expect(classOccursOn(odd, item.startDatetime.slice(0, 10))).toBe(true);
+  });
+});
+
+describe('block reminders', () => {
+  const block = (over = {}) => ({ id: 'bk1', title: 'Deep work', start: '09:00', end: '11:00', reminder: { timing: '10min' }, done: false, ...over });
+
+  it('anchors a one-shot to the block\'s own date', () => {
+    expect(blockReminderItem(block(), '2026-07-01')).toMatchObject({
+      id: 'bk1', name: 'Deep work', startDatetime: '2026-07-01T09:00',
+      recurrence: 'none', done: false, notifications: [{ timing: '10min', time: '09:00' }],
+    });
+  });
+
+  it('arms nothing without a reminder', () => {
+    expect(blockReminderItem(block({ reminder: null }), '2026-07-01').notifications).toEqual([]);
+  });
+
+  it('schedules a sticky (ongoing) one-shot that clears when done', () => {
+    const NOW = new Date('2026-06-01T00:00:00').getTime();
+    const specs = buildNotificationSpecs(blockReminderItem(block(), '2026-07-01'), 'block', NOW);
+    expect(specs).toHaveLength(1);
+    expect(specs[0].schedule).toEqual({ at: new Date('2026-07-01T08:50:00'), allowWhileIdle: true });
+    expect(specs[0].ongoing).toBe(true);
+    expect(specs[0].autoCancel).toBe(false);
+    expect(specs[0].body).toBe('Planned block'); // block's notes serve as the body
+    // a completed block arms nothing (and resync can't resurrect it)
+    expect(buildNotificationSpecs(blockReminderItem(block({ done: true }), '2026-07-01'), 'block', NOW)).toEqual([]);
   });
 });

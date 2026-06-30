@@ -6,7 +6,7 @@ import { C, fonts } from './lib/theme.js';
 import { todayISO, newId, setWeekStart, greeting, dateKicker } from './lib/helpers.js';
 import { loadState, saveStateField } from './lib/storage.js';
 import { DEFAULTS } from './lib/seed.js';
-import { initNotifications, resyncAll, scheduleItem, cancelItem, classReminderItem } from './lib/notifications.js';
+import { initNotifications, resyncAll, scheduleItem, cancelItem, classReminderItem, blockReminderItem } from './lib/notifications.js';
 import { setHapticsEnabled, tapLight, tapMedium } from './lib/haptics.js';
 import {
   reducer, initialState, DEFAULT_SETTINGS, PERSISTED_KEYS,
@@ -131,6 +131,42 @@ export default function App() {
     }
     persistedRef.current = state;
   }, [state, loaded]);
+
+  // Keep planner-block reminders in sync with the plan. Sticky one-shots are
+  // armed for today's and future undone blocks; checking a block off (or
+  // removing it) cancels its reminder. Keyed on a signature so editing a
+  // block's title doesn't needlessly reschedule.
+  const dayPlansRef = useRef(state.dayPlans);
+  useEffect(() => { dayPlansRef.current = state.dayPlans; });
+  const scheduledBlockIds = useRef(new Set());
+  const blockReminderSig = useMemo(() =>
+    (state.dayPlans || []).flatMap(p =>
+      (p.blocks || [])
+        .filter(b => b.reminder)
+        .map(b => `${p.date}:${b.id}:${b.start}:${b.reminder.timing}:${b.done ? 1 : 0}`)
+    ).join('|'),
+    [state.dayPlans]);
+  useEffect(() => {
+    if (!loaded) return;
+    const plans = dayPlansRef.current || [];
+    const today = todayISO();
+    const next = new Set();
+    const toSchedule = [];
+    for (const p of plans) {
+      if (p.date < today) continue; // past days never (re)arm
+      for (const b of (p.blocks || [])) {
+        if (!b.reminder) continue;
+        next.add(b.id);
+        if (!b.done) toSchedule.push(blockReminderItem(b, p.date));
+      }
+    }
+    const prev = scheduledBlockIds.current;
+    scheduledBlockIds.current = next;
+    (async () => {
+      for (const id of prev) await cancelItem(id);
+      for (const item of toSchedule) await scheduleItem(item, 'block');
+    })();
+  }, [blockReminderSig, loaded]);
 
   // Mirror user settings into the helper modules.
   useEffect(() => { setWeekStart(settings.weekStartsOn); }, [settings.weekStartsOn]);

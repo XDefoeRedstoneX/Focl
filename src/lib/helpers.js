@@ -285,6 +285,16 @@ export const classOccursOn = (cls, dateISO) => {
   return weeks === 'all' ? true : weekParity(dateISO) === weeks;
 };
 
+// The next date on/after fromISO when a class meets (honoring odd/even weeks),
+// scanning up to 3 weeks ahead. null if it never matches (e.g. no days set).
+export const nextClassDate = (cls, fromISO) => {
+  for (let i = 0; i < 21; i++) {
+    const d = addDays(i, fromISO);
+    if (classOccursOn(cls, d)) return d;
+  }
+  return null;
+};
+
 // Adherence stats for one day plan. on-time = a done block whose completion
 // (doneAt) landed no later than its end time plus a grace window. Blocks
 // completed without a recorded doneAt don't count toward on-time.

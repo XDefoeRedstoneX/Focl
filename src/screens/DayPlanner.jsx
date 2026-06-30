@@ -4,7 +4,9 @@ import {
   newId, todayISO, fmtDate, hmToMin, minToHM, snapMin, blocksOverlap,
   classOccursOn, minutesUntilWindow,
 } from '../lib/helpers.js';
-import { Chip, Field, Confirm } from '../components/ui.jsx';
+import { Chip, Field, Confirm, Toggle } from '../components/ui.jsx';
+
+const REMINDER_OPTS = [['on-day', 'At start'], ['10min', '10 min'], ['30min', '30 min'], ['1hour', '1 hour']];
 
 // Timeline geometry. 06:00–24:00 on a 15-minute grid.
 const DAY_START = 6 * 60;
@@ -446,6 +448,17 @@ function BlockEditor({ block, onChange, onRemove, onClose, onSaveTemplate }) {
             <input type="time" value={block.end} onChange={e => onChange({ end: e.target.value })} style={inp} />
           </Field>
         </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: block.reminder ? 10 : 14 }}>
+          <span style={{ fontSize: 13 }}>Reminder</span>
+          <Toggle on={!!block.reminder} onChange={v => onChange({ reminder: v ? { timing: '10min' } : null })} />
+        </div>
+        {block.reminder && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+            {REMINDER_OPTS.map(([v, l]) => (
+              <Chip key={v} active={block.reminder.timing === v} onClick={() => onChange({ reminder: { timing: v } })}>{l}</Chip>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button onClick={() => setConfirmRemove(true)} style={{ flex: 1, padding: 10, background: C.s2, border: `0.5px solid ${C.border}`, borderRadius: 100, color: C.red, fontSize: 13, cursor: 'pointer' }}>Remove</button>
           <button onClick={onSaveTemplate} style={{ flex: 1, padding: 10, background: C.s2, border: `0.5px solid ${C.border}`, borderRadius: 100, color: C.t1, fontSize: 13, cursor: 'pointer' }}>Save template</button>
