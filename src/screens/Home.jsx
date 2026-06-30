@@ -1,16 +1,20 @@
 import { useState } from 'react';
 import { C, card, monoMicro, sectionTitle, dot, inp } from '../lib/theme.js';
-import { todayISO, fmtTime, isHabitDueOn, eventOccursOn, classOccursOn } from '../lib/helpers.js';
+import { todayISO, fmtTime, isHabitDueOn, eventOccursOn, classOccursOn, isPlanningWindow } from '../lib/helpers.js';
 
 const RING_CIRCUMFERENCE = 2 * Math.PI * 52; // r = 52
 
 export function Home({
   tasks, events, habits, spaces, settings, classes = [],
   toggleTask, toggleHabitDay, deleteTask, openEdit,
-  quickAddTask, setScreen,
+  quickAddTask, setScreen, onPlanTomorrow,
 }) {
   const today = todayISO();
   const [quick, setQuick] = useState('');
+
+  const planningOpen = settings?.dayPlannerEnabled !== false
+    && !!settings?.planningWindow
+    && isPlanningWindow(new Date(), settings.planningWindow);
 
   // Today's tasks + due habits drive the momentum ring.
   const dueToday = tasks
@@ -90,6 +94,26 @@ export function Home({
           </div>
         </div>
       </div>
+
+      {/* Planning-window CTA: only appears during the nightly window */}
+      {planningOpen && onPlanTomorrow && (
+        <button
+          onClick={onPlanTomorrow}
+          style={{
+            width: '100%', textAlign: 'left', cursor: 'pointer', marginTop: 14,
+            display: 'flex', alignItems: 'center', gap: 13, padding: '14px 16px',
+            borderRadius: 18, background: 'rgba(92,198,207,0.10)',
+            border: `0.5px solid ${C.amber}66`, borderLeft: `3px solid ${C.amber}`,
+          }}
+        >
+          <span style={{ fontSize: 20 }}>🌙</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 10, fontFamily: 'DM Mono', color: C.amber, textTransform: 'uppercase', letterSpacing: 1 }}>Planning time</div>
+            <div style={{ fontSize: 14.5, fontWeight: 500, marginTop: 3 }}>Build tomorrow</div>
+          </div>
+          <span style={{ color: C.amber, fontSize: 18 }}>→</span>
+        </button>
+      )}
 
       {/* Up next */}
       {upNext && (

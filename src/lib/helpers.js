@@ -214,6 +214,27 @@ export const hmToMin = (hm) => {
   return h * 60 + (m || 0);
 };
 
+// minutes since midnight → 'HH:MM' (zero-padded). 1440 → '24:00' (end-of-day),
+// the inverse of hmToMin so a block ending at midnight round-trips cleanly.
+export const minToHM = (min) =>
+  `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+// Round a minute value to the nearest `step` (default 15-min grid).
+export const snapMin = (min, step = 15) => Math.round(min / step) * step;
+
+// Do two {start,end} blocks (minutes) overlap? Touching edges don't count.
+export const blocksOverlap = (a, b) =>
+  hmToMin(a.start) < hmToMin(b.end) && hmToMin(b.start) < hmToMin(a.end);
+
+// Minutes from `now` until the planning window next opens (0 if already open).
+export const minutesUntilWindow = (now, window) => {
+  if (!window || isPlanningWindow(now, window)) return 0;
+  const cur = now.getHours() * 60 + now.getMinutes();
+  let diff = hmToMin(window.start) - cur;
+  if (diff <= 0) diff += 1440; // opens tomorrow
+  return diff;
+};
+
 // Is `now` (a Date) inside the nightly planning window? The window is
 // { start, end } as 'HH:MM' local times. Windows may end at '24:00' and may
 // wrap past midnight (start > end), e.g. { start:'22:00', end:'02:00' }.

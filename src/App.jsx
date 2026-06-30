@@ -94,6 +94,7 @@ export default function App() {
   const [draft, setDraft] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [toast, setToast] = useState(null);
+  const [planTab, setPlanTab] = useState('agenda');
 
   const { spaces, tasks, events, habits, settings, archive, kits, plan, sessions, classes } = state;
 
@@ -366,6 +367,24 @@ export default function App() {
     dispatch({ type: 'class/delete', id });
   };
 
+  // === Day Planner handlers (block ids generated here, reducer stays pure) ===
+
+  const planner = {
+    addBlock: (date, block) => dispatch({ type: 'dayplan/addBlock', date, block }),
+    updateBlock: (date, id, patch) => dispatch({ type: 'dayplan/updateBlock', date, id, patch }),
+    removeBlock: (date, id) => dispatch({ type: 'dayplan/removeBlock', date, id }),
+    seedDay: (date, blocks) => dispatch({ type: 'dayplan/seed', date, blocks }),
+    commitDay: (date) => {
+      tapMedium();
+      dispatch({ type: 'dayplan/commit', date, at: new Date().toISOString() });
+      setToast({ message: 'Locked in!' });
+    },
+    saveBlockTemplate: (template) => dispatch({ type: 'blockTemplate/save', template }),
+    saveDayTemplate: (template) => dispatch({ type: 'dayTemplate/save', template }),
+  };
+
+  const planTomorrow = () => { setPlanTab('tomorrow'); setScreen('plan'); };
+
   // === Workout handlers ===
 
   const saveKit = (kit) => {
@@ -455,12 +474,16 @@ export default function App() {
                 toggleTask={toggleTask} toggleHabitDay={toggleHabitDay}
                 deleteTask={deleteTask} openEdit={openEdit}
                 quickAddTask={quickAddTask} setScreen={setScreen}
+                onPlanTomorrow={planTomorrow}
               />
             )}
             {screen === 'plan' && (
               <Plan
                 tasks={tasks} events={events} spaces={spaces} classes={classes}
                 openEdit={openEdit} setScreen={setScreen}
+                tab={planTab} setTab={setPlanTab} settings={settings}
+                dayPlans={state.dayPlans} blockTemplates={state.blockTemplates}
+                dayTemplates={state.dayTemplates} planner={planner}
               />
             )}
             {screen === 'habits' && (

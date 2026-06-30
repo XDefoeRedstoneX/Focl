@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { reducer, initialState, sanitizeImport } from './store.js';
 import { runDailyMaintenance } from './maintenance.js';
 import {
-  hmToMin, isPlanningWindow, plannableDate, planEditMode,
+  hmToMin, minToHM, snapMin, blocksOverlap, minutesUntilWindow,
+  isPlanningWindow, plannableDate, planEditMode,
   classOccursOn, planAdherence,
 } from '../lib/helpers.js';
 
@@ -31,6 +32,36 @@ describe('isPlanningWindow', () => {
     expect(hmToMin('00:00')).toBe(0);
     expect(hmToMin('08:30')).toBe(510);
     expect(hmToMin('24:00')).toBe(1440);
+  });
+});
+
+describe('timeline math', () => {
+  it('minToHM is the inverse of hmToMin, with 1440 → 24:00', () => {
+    expect(minToHM(0)).toBe('00:00');
+    expect(minToHM(510)).toBe('08:30');
+    expect(minToHM(1440)).toBe('24:00');
+    for (const hm of ['06:15', '13:45', '24:00']) expect(minToHM(hmToMin(hm))).toBe(hm);
+  });
+
+  it('snapMin rounds to the nearest 15-minute grid', () => {
+    expect(snapMin(7)).toBe(0);
+    expect(snapMin(8)).toBe(15);
+    expect(snapMin(517)).toBe(510); // 8:37 → 8:30 (nearer)
+    expect(snapMin(523)).toBe(525); // 8:43 → 8:45
+    expect(snapMin(100, 30)).toBe(90);
+  });
+
+  it('blocksOverlap is true on intersection, false when edges merely touch', () => {
+    expect(blocksOverlap({ start: '09:00', end: '10:00' }, { start: '09:30', end: '11:00' })).toBe(true);
+    expect(blocksOverlap({ start: '09:00', end: '10:00' }, { start: '10:00', end: '11:00' })).toBe(false);
+    expect(blocksOverlap({ start: '09:00', end: '10:00' }, { start: '11:00', end: '12:00' })).toBe(false);
+  });
+
+  it('minutesUntilWindow counts to the next opening, 0 while open', () => {
+    const w = { start: '20:00', end: '24:00' };
+    expect(minutesUntilWindow(new Date(2026, 5, 29, 21, 0), w)).toBe(0);   // open now
+    expect(minutesUntilWindow(new Date(2026, 5, 29, 18, 0), w)).toBe(120); // opens in 2h today
+    expect(minutesUntilWindow(new Date(2026, 5, 29, 2, 0), w)).toBe(1080); // opens 20:00 today
   });
 });
 

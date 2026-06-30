@@ -156,6 +156,41 @@ export function Settings({ settings, updateSettings, state, importState, resetAl
         </div>
       </div>
 
+      {/* Day Planner */}
+      <div style={sectionLabel}>Day planner</div>
+      <div style={{ ...card, overflow: 'hidden', marginBottom: 8 }}>
+        <div style={rowStyle}>
+          <div>
+            <div style={{ fontSize: 14 }}>Day planner</div>
+            <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Build tomorrow on a timeline</div>
+          </div>
+          <Toggle
+            on={settings.dayPlannerEnabled !== false}
+            onChange={v => updateSettings({ dayPlannerEnabled: v })}
+          />
+        </div>
+        {settings.dayPlannerEnabled !== false && (
+          <div style={{ ...rowStyle, borderTop: `0.5px solid ${C.border}` }}>
+            <div>
+              <div style={{ fontSize: 14 }}>Planning opens at</div>
+              <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Nightly, until midnight</div>
+            </div>
+            <input
+              type="time"
+              value={(settings.planningWindow || { start: '20:00' }).start}
+              onChange={e => updateSettings({ planningWindow: { start: e.target.value, end: '24:00' } })}
+              style={{
+                background: C.s2, border: `0.5px solid ${C.border}`, borderRadius: 10,
+                color: C.t1, fontSize: 13, padding: '6px 10px', fontFamily: 'DM Mono',
+              }}
+            />
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: 11, color: C.t3, marginBottom: 20, padding: '0 4px' }}>
+        The planner only opens during this nightly window. Tomorrow locks once it begins.
+      </div>
+
       {/* Notifications */}
       <div style={sectionLabel}>Notifications</div>
       <div style={{ ...card, overflow: 'hidden', marginBottom: 8 }}>
