@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { C, card, inp } from '../lib/theme.js';
+import { C, card, inp, SWATCHES } from '../lib/theme.js';
 import {
   newId, todayISO, fmtDate, hmToMin, minToHM, snapMin, blocksOverlap,
   classOccursOn, minutesUntilWindow, findDuplicateTemplate,
@@ -31,8 +31,14 @@ const fmtCountdown = (min) => {
   return h ? `${h}h ${m}m` : `${m}m`;
 };
 
-const blockColor = (kind, spaceColor) =>
-  spaceColor || (kind === 'class' ? C.amber : kind === 'task' ? C.green : C.blue);
+const kindDefault = (kind) =>
+  kind === 'class' ? C.amber : kind === 'task' ? C.green : C.blue;
+
+// A block's rendered color. An explicit block/template color wins, then the
+// space color, then a per-kind default — so a block can be individually
+// colored regardless of its space.
+const blockColor = (block, spaceColor) =>
+  block.color || spaceColor || kindDefault(block.kind);
 
 export function DayPlanner({
   date, mode, window, dayPlan, classes, tasks, spaces,
@@ -135,7 +141,7 @@ export function DayPlanner({
   const addCustom = (title) => { if (title.trim()) add({ title: title.trim(), kind: 'custom' }); };
   const addTask = (t) => add({ title: t.name, kind: 'task', refId: t.id, spaceId: t.spaceId });
   const addTemplate = (tpl) =>
-    add({ title: tpl.title, kind: tpl.kind || 'custom', spaceId: tpl.spaceId || '', sourceTemplateId: tpl.id }, tpl.durationMin || 60);
+    add({ title: tpl.title, kind: tpl.kind || 'custom', spaceId: tpl.spaceId || '', color: tpl.color || '', sourceTemplateId: tpl.id }, tpl.durationMin || 60);
 
   const applyDayTemplate = (tpl) => {
     planner.seedDay(date, (tpl.blocks || []).map(b => ({ ...b, id: newId(), done: false })));
@@ -164,7 +170,7 @@ export function DayPlanner({
     }
     planner.saveBlockTemplate({
       id: newId(), title: b.title.trim(), kind: b.kind, spaceId: b.spaceId || '',
-      durationMin: hmToMin(b.end) - hmToMin(b.start),
+      color: b.color || '', durationMin: hmToMin(b.end) - hmToMin(b.start),
     });
     showToast?.('Saved as template');
   };
@@ -270,7 +276,7 @@ export function DayPlanner({
             const e = effective(b);
             const top = (hmToMin(e.start) - DAY_START) * PXPM;
             const height = Math.max((hmToMin(e.end) - hmToMin(e.start)) * PXPM, 16);
-            const col = blockColor(b.kind, spaceColor(b.spaceId));
+            const col = blockColor(b, spaceColor(b.spaceId));
             const bad = overlapsOther(b);
             return (
               <div
@@ -339,6 +345,7 @@ export function DayPlanner({
       {editing && (
         <BlockEditor
           block={userBlocks.find(b => b.id === editing.id) || editing}
+          fallbackColor={spaceColor(editing.spaceId) || kindDefault(editing.kind)}
           onChange={(patch) => mutate.update(editing.id, patch)}
           onRemove={() => { mutate.remove(editing.id); setEditing(null); }}
           onSaveTemplate={() => { saveAsTemplate(userBlocks.find(b => b.id === editing.id) || editing); setEditing(null); }}
@@ -497,7 +504,7 @@ function Palette({ tasks, templates, spaces, onAddCustom, onAddTask, onAddTempla
   );
 }
 
-function BlockEditor({ block, onChange, onRemove, onClose, onSaveTemplate }) {
+function BlockEditor({ block, fallbackColor, onChange, onRemove, onClose, onSaveTemplate }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
   return (
     <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -511,6 +518,9 @@ function BlockEditor({ block, onChange, onRemove, onClose, onSaveTemplate }) {
             <input type="time" value={block.end} onChange={e => onChange({ end: e.target.value })} style={inp} />
           </Field>
         </div>
+        <Field label="Color">
+          <SwatchRow value={block.color || ''} fallback={fallbackColor} onChange={c => onChange({ color: c })} />
+        </Field>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: block.reminder ? 10 : 14 }}>
           <span style={{ fontSize: 13 }}>Reminder</span>
           <Toggle on={!!block.reminder} onChange={v => onChange({ reminder: v ? { timing: '10min' } : null })} />
@@ -572,6 +582,10 @@ function TemplateEditor({ template, onSave, onClose }) {
           </div>
         </Field>
 
+        <Field label="Color">
+          <SwatchRow value={draft.color || ''} fallback={kindDefault(draft.kind)} onChange={c => upd({ color: c })} />
+        </Field>
+
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button onClick={onClose} style={{ flex: 1, padding: 10, background: C.s2, border: `0.5px solid ${C.border}`, borderRadius: 100, color: C.t2, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
           <button onClick={() => onSave(draft)} disabled={!draft.title.trim()} style={{ flex: 1, padding: 10, background: draft.title.trim() ? C.amber : C.s3, border: 'none', borderRadius: 100, color: draft.title.trim() ? C.bg : C.t3, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save</button>
@@ -586,6 +600,31 @@ const stepBtn = {
   background: C.s2, border: `0.5px solid ${C.border}`, color: C.t1,
   fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
 };
+
+// Swatch picker with an "Auto" option (empty value) that inherits the space/
+// kind default shown as `fallback`.
+function SwatchRow({ value, fallback, onChange }) {
+  const sw = { width: 26, height: 26, borderRadius: 100, cursor: 'pointer', flexShrink: 0 };
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <button
+        onClick={() => onChange('')} aria-label="Auto color"
+        style={{
+          ...sw, background: fallback || C.s3,
+          border: !value ? `2px solid ${C.t1}` : `0.5px solid ${C.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: C.bg, fontSize: 9, fontFamily: 'DM Mono', fontWeight: 600,
+        }}
+      >A</button>
+      {SWATCHES.map(c => (
+        <button
+          key={c} onClick={() => onChange(c)} aria-label={`Color ${c}`}
+          style={{ ...sw, background: c, border: value === c ? `2px solid ${C.t1}` : `0.5px solid ${C.border}` }}
+        />
+      ))}
+    </div>
+  );
+}
 
 function NameModal({ title, onSave, onCancel }) {
   const [name, setName] = useState('');

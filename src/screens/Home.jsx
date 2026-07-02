@@ -202,7 +202,7 @@ export function Home({
 
 function TodayPlanCard({ blocks, spaces, onToggle, onOpen }) {
   const done = blocks.filter(b => b.done).length;
-  const spaceColor = (id) => spaces.find(s => s.id === id)?.color || C.blue;
+  const blockColor = (b) => b.color || spaces.find(s => s.id === b.spaceId)?.color || C.blue;
   return (
     <div style={{ ...card, marginTop: 14, padding: 16, borderRadius: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -214,7 +214,7 @@ function TodayPlanCard({ blocks, spaces, onToggle, onOpen }) {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {blocks.map(b => {
-          const col = spaceColor(b.spaceId);
+          const col = blockColor(b);
           return (
             <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
               <button
