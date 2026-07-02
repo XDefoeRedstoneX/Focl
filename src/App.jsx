@@ -423,7 +423,9 @@ export default function App() {
       setToast({ message: 'Locked in!' });
     },
     saveBlockTemplate: (template) => dispatch({ type: 'blockTemplate/save', template }),
+    deleteBlockTemplate: (id) => dispatch({ type: 'blockTemplate/delete', id }),
     saveDayTemplate: (template) => dispatch({ type: 'dayTemplate/save', template }),
+    deleteDayTemplate: (id) => dispatch({ type: 'dayTemplate/delete', id }),
   };
 
   const planTomorrow = () => { setPlanTab('tomorrow'); setScreen('plan'); };
@@ -530,6 +532,7 @@ export default function App() {
                 tab={planTab} setTab={setPlanTab} settings={settings}
                 dayPlans={state.dayPlans} blockTemplates={state.blockTemplates}
                 dayTemplates={state.dayTemplates} planner={planner}
+                showToast={(message) => setToast({ message })}
               />
             )}
             {screen === 'habits' && (

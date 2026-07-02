@@ -5,6 +5,7 @@ import {
   hmToMin, minToHM, snapMin, blocksOverlap, minutesUntilWindow,
   isPlanningWindow, plannableDate, planEditMode,
   classOccursOn, planAdherence, weekPlanAdherence, nextClassDate,
+  findDuplicateTemplate,
 } from '../lib/helpers.js';
 
 const base = (over = {}) => ({ ...initialState, ...over });
@@ -55,6 +56,22 @@ describe('timeline math', () => {
     expect(blocksOverlap({ start: '09:00', end: '10:00' }, { start: '09:30', end: '11:00' })).toBe(true);
     expect(blocksOverlap({ start: '09:00', end: '10:00' }, { start: '10:00', end: '11:00' })).toBe(false);
     expect(blocksOverlap({ start: '09:00', end: '10:00' }, { start: '11:00', end: '12:00' })).toBe(false);
+  });
+
+  it('findDuplicateTemplate matches on normalized title and honors excludeId', () => {
+    const templates = [
+      { id: 'a', title: 'Deep work' },
+      { id: 'b', title: 'Gym' },
+      { id: 'c', name: 'Weekday' }, // day templates use `name`
+    ];
+    expect(findDuplicateTemplate(templates, 'deep work')?.id).toBe('a');
+    expect(findDuplicateTemplate(templates, '  DEEP WORK  ')?.id).toBe('a');
+    expect(findDuplicateTemplate(templates, 'Weekday')?.id).toBe('c');
+    expect(findDuplicateTemplate(templates, 'Reading')).toBeNull();
+    // Editing 'a' in place: its own title is not a collision with itself.
+    expect(findDuplicateTemplate(templates, 'Deep work', 'a')).toBeNull();
+    // Empty / whitespace titles never collide.
+    expect(findDuplicateTemplate(templates, '   ')).toBeNull();
   });
 
   it('minutesUntilWindow counts to the next opening, 0 while open', () => {

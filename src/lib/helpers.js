@@ -226,6 +226,18 @@ export const snapMin = (min, step = 15) => Math.round(min / step) * step;
 export const blocksOverlap = (a, b) =>
   hmToMin(a.start) < hmToMin(b.end) && hmToMin(b.start) < hmToMin(a.end);
 
+// Find an existing template that collides with a candidate title, matched on a
+// normalized (trimmed, case-insensitive) name. Used to stop duplicate block/day
+// templates piling up. Pass `excludeId` when editing a template in place so it
+// doesn't count as a collision with itself. Returns the clashing template or null.
+export const findDuplicateTemplate = (templates, title, excludeId = null) => {
+  const key = String(title || '').trim().toLowerCase();
+  if (!key) return null;
+  return (templates || []).find(
+    t => t.id !== excludeId && String(t.title ?? t.name ?? '').trim().toLowerCase() === key
+  ) || null;
+};
+
 // Minutes from `now` until the planning window next opens (0 if already open).
 export const minutesUntilWindow = (now, window) => {
   if (!window || isPlanningWindow(now, window)) return 0;

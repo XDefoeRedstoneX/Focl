@@ -9,6 +9,7 @@ import { DayPlanner } from './DayPlanner.jsx';
 export function Plan({
   tasks, events, spaces, classes = [], openEdit, setScreen,
   tab = 'agenda', setTab, settings, dayPlans = [], blockTemplates = [], dayTemplates = [], planner,
+  showToast,
 }) {
   const today = todayISO();
   const [selected, setSelected] = useState(today);
@@ -57,7 +58,7 @@ export function Plan({
               dayPlan={dayPlans.find(p => p.date === d)}
               classes={classes} tasks={tasks} spaces={spaces}
               blockTemplates={blockTemplates} dayTemplates={dayTemplates}
-              planner={planner}
+              planner={planner} showToast={showToast}
             />
           );
         })()

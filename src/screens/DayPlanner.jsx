@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { C, card, inp } from '../lib/theme.js';
 import {
   newId, todayISO, fmtDate, hmToMin, minToHM, snapMin, blocksOverlap,
-  classOccursOn, minutesUntilWindow,
+  classOccursOn, minutesUntilWindow, findDuplicateTemplate,
 } from '../lib/helpers.js';
 import { Chip, Field, Confirm, Toggle } from '../components/ui.jsx';
 
@@ -36,12 +36,13 @@ const blockColor = (kind, spaceColor) =>
 
 export function DayPlanner({
   date, mode, window, dayPlan, classes, tasks, spaces,
-  blockTemplates, dayTemplates, planner,
+  blockTemplates, dayTemplates, planner, showToast,
 }) {
   const editable = mode === 'edit';            // building tomorrow
   const isToday = date === todayISO();
   const [drag, setDrag] = useState(null);     // { id, start, end } in minutes, during a gesture
   const [editing, setEditing] = useState(null); // block being edited in the modal
+  const [editingTemplate, setEditingTemplate] = useState(null); // block template in the editor
   const [sheet, setSheet] = useState(null);    // 'palette' | 'templates' | null
   const [naming, setNaming] = useState(false);  // save-day-template name modal
   const [emergency, setEmergency] = useState(false);       // editing a locked plan
@@ -142,6 +143,10 @@ export function DayPlanner({
   };
   const saveDayTemplate = (name) => {
     if (!name.trim()) return;
+    if (findDuplicateTemplate(dayTemplates, name)) {
+      showToast?.(`A day template named "${name.trim()}" already exists`);
+      return;
+    }
     planner.saveDayTemplate({
       id: newId(), name: name.trim(),
       // eslint-disable-next-line no-unused-vars
@@ -150,11 +155,30 @@ export function DayPlanner({
     setNaming(false);
     setSheet(null);
   };
+  // "Save template" on a block: dedupe by title so tapping it twice (or saving
+  // two similarly-named blocks) doesn't pile up duplicates.
   const saveAsTemplate = (b) => {
+    if (findDuplicateTemplate(blockTemplates, b.title)) {
+      showToast?.('Template already saved');
+      return;
+    }
     planner.saveBlockTemplate({
-      id: newId(), title: b.title, kind: b.kind, spaceId: b.spaceId || '',
+      id: newId(), title: b.title.trim(), kind: b.kind, spaceId: b.spaceId || '',
       durationMin: hmToMin(b.end) - hmToMin(b.start),
     });
+    showToast?.('Saved as template');
+  };
+  // Create or edit a block template from the template editor.
+  const commitTemplate = (tpl) => {
+    const title = tpl.title.trim();
+    if (!title) return;
+    if (findDuplicateTemplate(blockTemplates, title, tpl.id)) {
+      showToast?.(`A template named "${title}" already exists`);
+      return;
+    }
+    planner.saveBlockTemplate({ ...tpl, id: tpl.id || newId(), title });
+    setEditingTemplate(null);
+    showToast?.(tpl.id ? 'Template updated' : 'Template saved');
   };
 
   const committed = dayPlan?.status === 'locked' || !!dayPlan?.committedAt;
@@ -327,7 +351,18 @@ export function DayPlanner({
         <Palette
           tasks={incompleteTasks} templates={blockTemplates} spaces={spaces}
           onAddCustom={addCustom} onAddTask={addTask} onAddTemplate={addTemplate}
+          onEditTemplate={(t) => { setSheet(null); setEditingTemplate(t); }}
+          onDeleteTemplate={planner.deleteBlockTemplate}
           onClose={() => setSheet(null)}
+        />
+      )}
+
+      {/* Block template editor */}
+      {editingTemplate && (
+        <TemplateEditor
+          template={editingTemplate}
+          onSave={commitTemplate}
+          onClose={() => setEditingTemplate(null)}
         />
       )}
 
@@ -336,10 +371,17 @@ export function DayPlanner({
         <Sheet title="Day templates" onClose={() => setSheet(null)}>
           {dayTemplates.length === 0 && <div style={{ fontSize: 12, color: C.t3, padding: '8px 0' }}>No saved day templates yet.</div>}
           {dayTemplates.map(t => (
-            <button key={t.id} onClick={() => applyDayTemplate(t)} style={rowBtn}>
-              <span>{t.name}</span>
-              <span style={{ fontSize: 11, color: C.t3, fontFamily: 'DM Mono' }}>{(t.blocks || []).length} blocks →</span>
-            </button>
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', borderBottom: `0.5px solid ${C.border}` }}>
+              <button onClick={() => applyDayTemplate(t)} style={{ ...rowBtn, flex: 1, borderBottom: 'none' }}>
+                <span>{t.name}</span>
+                <span style={{ fontSize: 11, color: C.t3, fontFamily: 'DM Mono' }}>{(t.blocks || []).length} blocks →</span>
+              </button>
+              <button
+                onClick={() => planner.deleteDayTemplate(t.id)}
+                aria-label={`Delete ${t.name}`}
+                style={{ background: 'none', border: 'none', color: C.t3, fontSize: 18, cursor: 'pointer', padding: '0 4px 0 12px' }}
+              >×</button>
+            </div>
           ))}
           <button
             onClick={() => setNaming(true)}
@@ -389,8 +431,9 @@ function Sheet({ title, onClose, children }) {
   );
 }
 
-function Palette({ tasks, templates, spaces, onAddCustom, onAddTask, onAddTemplate, onClose }) {
+function Palette({ tasks, templates, spaces, onAddCustom, onAddTask, onAddTemplate, onEditTemplate, onDeleteTemplate, onClose }) {
   const [title, setTitle] = useState('');
+  const [manage, setManage] = useState(false);
   const spaceColor = (id) => spaces.find(s => s.id === id)?.color;
   const submit = () => { onAddCustom(title); setTitle(''); onClose(); };
   return (
@@ -408,12 +451,32 @@ function Palette({ tasks, templates, spaces, onAddCustom, onAddTask, onAddTempla
 
       {templates.length > 0 && (
         <>
-          <div style={{ fontSize: 10, fontFamily: 'DM Mono', color: C.t3, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Templates</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-            {templates.map(t => (
-              <Chip key={t.id} color={spaceColor(t.spaceId)} onClick={() => { onAddTemplate(t); onClose(); }}>{t.title}</Chip>
-            ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 10, fontFamily: 'DM Mono', color: C.t3, textTransform: 'uppercase', letterSpacing: 1 }}>Templates</span>
+            <button
+              onClick={() => setManage(m => !m)}
+              style={{ background: 'none', border: 'none', color: C.amber, fontSize: 12, cursor: 'pointer', padding: 0 }}
+            >{manage ? 'Done' : 'Manage'}</button>
           </div>
+          {manage ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+              {templates.map(t => (
+                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.s1, borderRadius: 10, padding: '8px 10px 8px 12px' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 100, background: t.color || spaceColor(t.spaceId) || C.t3, flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+                  {t.durationMin != null && <span style={{ fontSize: 10, fontFamily: 'DM Mono', color: C.t3 }}>{fmtCountdown(t.durationMin)}</span>}
+                  <button onClick={() => onEditTemplate(t)} aria-label="Edit template" style={{ background: 'none', border: 'none', color: C.t2, fontSize: 13, cursor: 'pointer', padding: '0 2px' }}>Edit</button>
+                  <button onClick={() => onDeleteTemplate(t.id)} aria-label="Delete template" style={{ background: 'none', border: 'none', color: C.red, fontSize: 18, cursor: 'pointer', padding: '0 2px' }}>×</button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+              {templates.map(t => (
+                <Chip key={t.id} color={t.color || spaceColor(t.spaceId)} onClick={() => { onAddTemplate(t); onClose(); }}>{t.title}</Chip>
+              ))}
+            </div>
+          )}
         </>
       )}
 
@@ -477,6 +540,52 @@ function BlockEditor({ block, onChange, onRemove, onClose, onSaveTemplate }) {
     </div>
   );
 }
+
+function TemplateEditor({ template, onSave, onClose }) {
+  const [draft, setDraft] = useState({
+    ...template,
+    title: template.title || '',
+    kind: template.kind || 'custom',
+    durationMin: template.durationMin || 60,
+  });
+  const upd = (patch) => setDraft(d => ({ ...d, ...patch }));
+  const bumpDur = (delta) => upd({ durationMin: clamp(draft.durationMin + delta, MIN_DUR, 12 * 60) });
+  return (
+    <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 25, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} className="fade-in" style={{ ...card, padding: 18, width: '100%', maxWidth: 320 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Edit template</div>
+        <input value={draft.title} onChange={e => upd({ title: e.target.value })} placeholder="Template name" style={{ ...inp, marginBottom: 14 }} autoFocus />
+
+        <Field label="Type">
+          <div style={{ display: 'flex', gap: 6 }}>
+            {[['custom', 'Custom'], ['task', 'Task']].map(([v, l]) => (
+              <Chip key={v} active={draft.kind === v} onClick={() => upd({ kind: v })}>{l}</Chip>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Duration">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => bumpDur(-15)} style={stepBtn}>−</button>
+            <span style={{ minWidth: 64, textAlign: 'center', fontSize: 14, fontFamily: 'DM Mono' }}>{fmtCountdown(draft.durationMin)}</span>
+            <button onClick={() => bumpDur(15)} style={stepBtn}>+</button>
+          </div>
+        </Field>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: 10, background: C.s2, border: `0.5px solid ${C.border}`, borderRadius: 100, color: C.t2, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={() => onSave(draft)} disabled={!draft.title.trim()} style={{ flex: 1, padding: 10, background: draft.title.trim() ? C.amber : C.s3, border: 'none', borderRadius: 100, color: draft.title.trim() ? C.bg : C.t3, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const stepBtn = {
+  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+  background: C.s2, border: `0.5px solid ${C.border}`, color: C.t1,
+  fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+};
 
 function NameModal({ title, onSave, onCancel }) {
   const [name, setName] = useState('');
